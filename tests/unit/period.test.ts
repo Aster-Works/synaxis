@@ -24,14 +24,19 @@ function ev(
   };
 }
 
+// person_id を省略すると毎回ユニークな人物として扱う（＝重複なし）。
+// 同一人物の重複（同じ日に複数礼拝）を検証したいときは personId を明示する。
+let personSeq = 0;
 function att(
   eventId: string,
   age: AgeGroup,
   rel: RelationshipStatus,
   lunch = 0,
+  personId?: string,
 ): PeriodAttendanceRow {
   return {
     service_event_id: eventId,
+    person_id: personId ?? `auto-${++personSeq}`,
     lunch_quantity: lunch,
     person: { age_group: age, relationship_status: rel },
   };
@@ -92,6 +97,41 @@ describe('summarizePeriod', () => {
     expect(r.totals.byKind.evening_worship).toEqual({ events: 1, present: 2, lunch: 0 });
     expect(r.totals.byRelationship.member).toBe(2);
     expect(r.totals.byRelationship.regular_attendee).toBe(1);
+  });
+
+  it('同じ日に朝礼拝と夕拝へ出た人は夕拝に含めない（日内ユニーク）', () => {
+    const events = [
+      ev('m', 'morning_worship', '2026-06-14T01:30:00Z', true), // JST 10:30
+      ev('e', 'evening_worship', '2026-06-14T09:00:00Z', false), // JST 18:00
+    ];
+    const attendance = [
+      att('m', 'adult', 'member', 0, 'A'), // 朝のみ
+      att('m', 'adult', 'member', 0, 'B'), // 朝＋夕
+      att('e', 'adult', 'member', 0, 'B'), // 夕（朝にも出た）→ 夕には数えない
+      att('e', 'child', 'seeker', 0, 'C'), // 夕のみ（新規）
+    ];
+    const r = summarizePeriod({ events, attendance, timezone: TZ });
+
+    // 朝=2(A,B)、夕=1(C のみ。B は朝に帰属)
+    expect(r.totals.byKind.morning_worship.present).toBe(2);
+    expect(r.totals.byKind.evening_worship.present).toBe(1);
+    // その日のユニーク出席=3（A,B,C を1回ずつ）
+    expect(r.totals.present).toBe(3);
+
+    expect(r.dayReports.length).toBe(1);
+    const day = r.dayReports[0];
+    expect(day.present).toBe(3);
+    expect(day.adults).toBe(2); // A,B
+    expect(day.children).toBe(1); // C
+    // 礼拝内訳：朝=2、夕=1（新規のみ）・開始時刻昇順
+    expect(day.services.map((s) => [s.name, s.present])).toEqual([
+      ['m', 2],
+      ['e', 1],
+    ]);
+
+    // 礼拝別 present も重複除外後
+    expect(r.eventReports.find((x) => x.event.id === 'm')!.present).toBe(2);
+    expect(r.eventReports.find((x) => x.event.id === 'e')!.present).toBe(1);
   });
 
   it('週推移は教会ローカル週起点でまとめる（同一週の朝礼拝と夕拝が合算）', () => {

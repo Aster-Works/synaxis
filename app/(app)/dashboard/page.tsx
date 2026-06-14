@@ -114,6 +114,75 @@ export default async function DashboardPage({
         <TrendChart points={report.trend} />
       </section>
 
+      {/* 日別（その日のユニーク出席。同じ日に複数礼拝へ出た人は1回だけ・最初の礼拝に計上） */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-slate-500">
+          日別（ユニーク出席）
+        </h2>
+        {report.dayReports.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
+            この期間の出席がありません
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {report.dayReports.slice(0, 30).map((d) => (
+              <div
+                key={d.date}
+                className="rounded-2xl border border-slate-200 bg-white p-3"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="font-semibold text-slate-900">
+                    {formatDateInZone(`${d.date}T12:00:00Z`, tz)}
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-[11px] text-slate-500">
+                      ユニーク出席{' '}
+                    </span>
+                    <span className="font-bold tabular-nums text-indigo-700">
+                      {d.present}
+                    </span>
+                  </p>
+                </div>
+                {/* 礼拝内訳：先頭=その日最初の礼拝、以降は「+N＝新規（前の礼拝に出ていない人）」 */}
+                <p className="mt-1 text-xs text-slate-600">
+                  {d.services.map((s, i) => (
+                    <span key={s.eventId}>
+                      {i > 0 && <span className="text-slate-300"> ・ </span>}
+                      {s.name}{' '}
+                      <span className="font-semibold tabular-nums text-slate-800">
+                        {i === 0 ? '' : '+'}
+                        {s.present}
+                      </span>
+                    </span>
+                  ))}
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
+                  <span>
+                    大人{' '}
+                    <span className="font-semibold text-slate-700">{d.adults}</span>
+                  </span>
+                  <span>
+                    {active.church.child_label}{' '}
+                    <span className="font-semibold text-slate-700">
+                      {d.children}
+                    </span>
+                  </span>
+                  <span className="text-slate-300">｜</span>
+                  {REL_ORDER.map((r) => (
+                    <span key={r}>
+                      {RELATIONSHIP_LABELS[r]}{' '}
+                      <span className="font-semibold text-slate-700">
+                        {d.byRelationship[r]}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* 礼拝別 */}
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-slate-500">礼拝別</h2>

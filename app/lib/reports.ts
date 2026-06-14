@@ -2,6 +2,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { summarizePeriod, type PeriodAttendanceRow } from './aggregate';
 import { summarizePeoplePresence } from './people-stats';
+import { zonedDateOf } from './datetime';
 import type {
   Period,
   PeriodReport,
@@ -60,7 +61,7 @@ export async function getPeriodReport(
   if (eventIds.length > 0) {
     const { data } = await supabase
       .from('attendance_records')
-      .select('service_event_id, lunch_quantity, person:people(age_group, relationship_status)')
+      .select('service_event_id, person_id, lunch_quantity, person:people(age_group, relationship_status)')
       .eq('church_id', churchId)
       .in('service_event_id', eventIds);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,7 +88,7 @@ export async function getPeopleStats(
 ): Promise<{ ratedEventCount: number; people: PersonPresence[] }> {
   let eventsQ = supabase
     .from('service_events')
-    .select('id, counts_toward_attendance_rate')
+    .select('id, starts_at, counts_toward_attendance_rate')
     .eq('church_id', churchId)
     .neq('status', 'cancelled')
     .gte('starts_at', bounds?.sinceISO ?? periodStart(filter.period).toISOString());
@@ -108,13 +109,28 @@ export async function getPeopleStats(
   const people = (peopleRes.data ?? []) as Person[];
   const events = (eventsRes.data ?? []) as {
     id: string;
+    starts_at: string;
     counts_toward_attendance_rate: boolean;
   }[];
   const ratedMap = new Map(events.map((e) => [e.id, e.counts_toward_attendance_rate]));
+  // 礼拝→教会ローカル日付。出席率は「礼拝数」ではなく「rated 日数」で数える
+  //（同じ日に朝礼拝と夕拝があっても、その日は1日分）。
+  const dayMap = new Map(events.map((e) => [e.id, zonedDateOf(e.starts_at, timezone)]));
   const ratedEventCount = events.filter((e) => e.counts_toward_attendance_rate).length;
+  const ratedDays = new Set(
+    events
+      .filter((e) => e.counts_toward_attendance_rate)
+      .map((e) => dayMap.get(e.id)!),
+  );
+  const ratedDayCount = ratedDays.size;
   const eventIds = events.map((e) => e.id);
 
-  let attendance: { person_id: string; checked_in_at: string; rated: boolean }[] = [];
+  let attendance: {
+    person_id: string;
+    checked_in_at: string;
+    day: string;
+    rated: boolean;
+  }[] = [];
   if (eventIds.length > 0) {
     const { data } = await supabase
       .from('attendance_records')
@@ -125,12 +141,14 @@ export async function getPeopleStats(
       (a: { person_id: string; checked_in_at: string; service_event_id: string }) => ({
         person_id: a.person_id,
         checked_in_at: a.checked_in_at,
+        day: dayMap.get(a.service_event_id)!,
         rated: ratedMap.get(a.service_event_id) ?? false,
       }),
     );
   }
 
-  const stats = summarizePeoplePresence({ people, attendance, ratedEventCount, timezone });
+  const stats = summarizePeoplePresence({ people, attendance, ratedDayCount, timezone });
+  // ratedEventCount は API 互換のため返す（出席率の分母は内部で日数 ratedDayCount を使用）。
   return { ratedEventCount, people: stats };
 }
 

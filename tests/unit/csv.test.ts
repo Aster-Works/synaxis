@@ -49,13 +49,13 @@ describe('buildSummaryRows は集計と一致する（画面=CSV）', () => {
   it('合計行が summarizePeriod.totals と一致', () => {
     const events = [ev('m1', true), ev('m2', true)];
     const attendance: PeriodAttendanceRow[] = [
-      { service_event_id: 'm1', lunch_quantity: 1, person: { age_group: 'adult', relationship_status: 'member' } },
-      { service_event_id: 'm1', lunch_quantity: 0, person: { age_group: 'child', relationship_status: 'member' } },
-      { service_event_id: 'm2', lunch_quantity: 2, person: { age_group: 'adult', relationship_status: 'guest' } },
+      { service_event_id: 'm1', person_id: 'p1', lunch_quantity: 1, person: { age_group: 'adult', relationship_status: 'member' } },
+      { service_event_id: 'm1', person_id: 'p2', lunch_quantity: 0, person: { age_group: 'child', relationship_status: 'member' } },
+      { service_event_id: 'm2', person_id: 'p3', lunch_quantity: 2, person: { age_group: 'adult', relationship_status: 'guest' } },
     ];
     const report = summarizePeriod({ events, attendance, timezone: TZ });
     const rows = buildSummaryRows(report, TZ);
-    const totalRow = rows[rows.length - 1];
+    const totalRow = rows.find((r) => r[0] === '合計')!;
     // [合計, ラベル, '', '', 総出席, 大人, 子ども, 不明, 昼食, 会員, 客員, 未信, ゲスト]
     expect(totalRow[0]).toBe('合計');
     expect(totalRow[4]).toBe(report.totals.present); // 3

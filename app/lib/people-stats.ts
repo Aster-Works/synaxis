@@ -7,22 +7,26 @@ import { zonedDateOf } from './datetime';
 
 export interface PeopleStatsInput {
   people: Person[]; // archived 除外済み
-  // 期間内・フィルタ後の出席（イベントの rated 判定つき）
+  // 期間内・フィルタ後の出席（礼拝の教会ローカル日付と rated 判定つき）
   attendance: {
     person_id: string;
     checked_in_at: string;
+    day: string; // 礼拝の教会ローカル日付 YYYY-MM-DD（出席率は「日」単位で数える）
     rated: boolean;
   }[];
-  ratedEventCount: number; // 期間内 rated イベント総数（出席率の分母）
+  ratedDayCount: number; // 期間内の rated「日数」（出席率の分母。礼拝数ではない）
   timezone: string;
 }
 
+// 出席率は「礼拝（朝・夕）」単位ではなく「日」単位で数える。
+// 同じ日に朝礼拝と夕拝の両方へ出ても、朝だけ出た人と同じく「その日に出席＝1日分」。
+// → 1日（朝夕）だけの記録なら、両方出た人も朝だけの人も同じ 100%。
 export function summarizePeoplePresence(input: PeopleStatsInput): PersonPresence[] {
-  const { people, attendance, ratedEventCount, timezone } = input;
+  const { people, attendance, ratedDayCount, timezone } = input;
 
   interface Acc {
-    count: number;
-    ratedCount: number;
+    ratedDays: Set<string>; // 出席した rated 日（出席率の分子）
+    allDays: Set<string>; // 出席した全日（出席回数・新来ゲスト判定に使用）
     minAt: string | null;
     maxAt: string | null;
   }
@@ -30,9 +34,10 @@ export function summarizePeoplePresence(input: PeopleStatsInput): PersonPresence
 
   for (const a of attendance) {
     const acc =
-      byPerson.get(a.person_id) ?? { count: 0, ratedCount: 0, minAt: null, maxAt: null };
-    acc.count += 1;
-    if (a.rated) acc.ratedCount += 1;
+      byPerson.get(a.person_id) ??
+      { ratedDays: new Set<string>(), allDays: new Set<string>(), minAt: null, maxAt: null };
+    acc.allDays.add(a.day);
+    if (a.rated) acc.ratedDays.add(a.day);
     if (acc.minAt === null || a.checked_in_at < acc.minAt) acc.minAt = a.checked_in_at;
     if (acc.maxAt === null || a.checked_in_at > acc.maxAt) acc.maxAt = a.checked_in_at;
     byPerson.set(a.person_id, acc);
@@ -40,8 +45,9 @@ export function summarizePeoplePresence(input: PeopleStatsInput): PersonPresence
 
   const out: PersonPresence[] = people.map((p) => {
     const acc = byPerson.get(p.id);
-    const count = acc?.count ?? 0;
-    const ratedCount = acc?.ratedCount ?? 0;
+    const daysAttended = acc?.allDays.size ?? 0;
+    const count = daysAttended; // 出席回数は「出席した日数」（同日に朝夕出ても1日は1）
+    const ratedDaysAttended = acc?.ratedDays.size ?? 0;
     const firstOn = p.first_visit_on
       ? p.first_visit_on
       : acc?.minAt
@@ -55,11 +61,16 @@ export function summarizePeoplePresence(input: PeopleStatsInput): PersonPresence
       relationship: p.relationship_status as RelationshipStatus,
       ageGroup: p.age_group as AgeGroup,
       count,
-      ratedCount,
-      rate: ratedEventCount > 0 ? Math.round((ratedCount / ratedEventCount) * 1000) / 1000 : 0,
+      ratedCount: ratedDaysAttended, // 出席率の分子＝出席した rated 日数
+      // 出席率＝出席した rated 日数 / 期間内 rated 日数（朝夕どちらに出ても1日は1）
+      rate:
+        ratedDayCount > 0
+          ? Math.round((ratedDaysAttended / ratedDayCount) * 1000) / 1000
+          : 0,
       firstOn,
       lastOn,
-      isNewGuest: p.relationship_status === 'guest' && count === 1,
+      // 新来ゲスト＝guest かつ「出席した日」が1日だけ（同日に朝夕2回でも1日）
+      isNewGuest: p.relationship_status === 'guest' && daysAttended === 1,
     };
   });
 

@@ -20,13 +20,13 @@ describe('Sheets まとめタブ = 画面集計 = CSV', () => {
   it('まとめの合計行が summarizePeriod.totals と一致する', () => {
     const events = [ev('m1', true), ev('s1', false)];
     const attendance: PeriodAttendanceRow[] = [
-      { service_event_id: 'm1', lunch_quantity: 2, person: { age_group: 'adult', relationship_status: 'member' } },
-      { service_event_id: 'm1', lunch_quantity: 0, person: { age_group: 'child', relationship_status: 'guest' } },
-      { service_event_id: 's1', lunch_quantity: 0, person: { age_group: 'adult', relationship_status: 'seeker' } },
+      { service_event_id: 'm1', person_id: 'p1', lunch_quantity: 2, person: { age_group: 'adult', relationship_status: 'member' } },
+      { service_event_id: 'm1', person_id: 'p2', lunch_quantity: 0, person: { age_group: 'child', relationship_status: 'guest' } },
+      { service_event_id: 's1', person_id: 'p3', lunch_quantity: 0, person: { age_group: 'adult', relationship_status: 'seeker' } },
     ];
     const report = summarizePeriod({ events, attendance, timezone: 'Asia/Tokyo' });
     const rows = buildSummaryRows(report, 'Asia/Tokyo');
-    const total = rows[rows.length - 1];
+    const total = rows.find((r) => r[0] === '合計')!;
     expect(total[4]).toBe(report.totals.present); // 3
     expect(total[8]).toBe(report.totals.lunch); // 2
     // 出席率の分母は rated(=m1) のみ → ratedEvents 1, avgAttendance = 2/1 = 2

@@ -31,7 +31,7 @@ export default async function EventsPage() {
   if (eventIds.length > 0) {
     const { data: att } = await supabase
       .from('attendance_records')
-      .select('service_event_id, lunch_quantity, person:people(age_group, relationship_status)')
+      .select('service_event_id, person_id, lunch_quantity, person:people(age_group, relationship_status)')
       .eq('church_id', active.church_id)
       .in('service_event_id', eventIds);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

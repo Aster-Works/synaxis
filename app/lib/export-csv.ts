@@ -46,6 +46,25 @@ export function buildSummaryRows(report: PeriodReport, timezone: string): CsvCel
     t.byRelationship.member, t.byRelationship.regular_attendee,
     t.byRelationship.seeker, t.byRelationship.guest,
   ]);
+
+  // 日別ユニーク出席（同じ日に複数礼拝へ出た人は1回だけ＝最初の礼拝に計上）。
+  // 礼拝内訳は先頭=その日最初の礼拝、以降は「+N＝新規（前の礼拝に出ていない人）」。
+  rows.push([]);
+  rows.push(['【日別ユニーク出席】']);
+  rows.push([
+    '日付', 'ユニーク出席', '大人', '子ども', '不明',
+    '会員', '客員', '未信', 'ゲスト', '礼拝内訳',
+  ]);
+  for (const d of report.dayReports) {
+    const breakdown = d.services
+      .map((s, i) => `${s.name} ${i === 0 ? '' : '+'}${s.present}`)
+      .join(' / ');
+    rows.push([
+      d.date, d.present, d.adults, d.children, d.unknownAge,
+      d.byRelationship.member, d.byRelationship.regular_attendee,
+      d.byRelationship.seeker, d.byRelationship.guest, breakdown,
+    ]);
+  }
   return rows;
 }
 

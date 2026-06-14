@@ -179,9 +179,30 @@ export interface TrendPoint {
   children: number;
 }
 
+// 日別ユニーク集計のうち、その日の礼拝ごとの内訳（present は日内重複除外後）。
+export interface PeriodDayServiceReport {
+  eventId: string;
+  name: string;
+  kind: ServiceKind;
+  startsAt: string;
+  present: number; // その礼拝に帰属したユニーク出席（先頭=最初の礼拝、以降=新規）
+}
+
+// 1日（教会ローカル暦日）のユニーク出席。同じ日に複数礼拝へ出た人は1回だけ数える。
+export interface PeriodDayReport {
+  date: string; // 教会ローカル YYYY-MM-DD
+  present: number; // その日のユニーク出席合計
+  adults: number;
+  children: number;
+  unknownAge: number;
+  byRelationship: Record<RelationshipStatus, number>;
+  services: PeriodDayServiceReport[]; // 開始時刻昇順
+}
+
 export interface PeriodReport {
   filter: ReportFilter;
-  eventReports: PeriodEventReport[]; // 新しい順
+  eventReports: PeriodEventReport[]; // 新しい順。present は日内重複除外後（夕拝は朝の出席者を除く）
+  dayReports: PeriodDayReport[]; // 日別ユニーク出席（新しい順）
   totals: PeriodTotals;
   trend: TrendPoint[]; // 週昇順
 }
@@ -192,10 +213,10 @@ export interface PersonPresence {
   furigana: string | null;
   relationship: RelationshipStatus;
   ageGroup: AgeGroup;
-  count: number; // 期間内・フィルタ後の出席回数
-  ratedCount: number; // rated イベント出席回数
-  rate: number; // ratedCount / 期間内 rated イベント総数（0..1）
+  count: number; // 期間内・フィルタ後の出席「日数」（同日に朝夕出ても1日は1）
+  ratedCount: number; // 出席した rated「日数」（出席率の分子）
+  rate: number; // 出席した rated 日数 / 期間内 rated 日数（0..1）。朝夕どちらに出ても1日は1
   firstOn: string | null; // 教会ローカル日付（first_visit_on 優先、無ければ min(checked_in_at)）
   lastOn: string | null; // max(checked_in_at) のローカル日付
-  isNewGuest: boolean; // guest かつ 期間内の出席が1回のみ
+  isNewGuest: boolean; // guest かつ 出席した日が1日だけ（同日に朝夕2回でも1日）
 }
