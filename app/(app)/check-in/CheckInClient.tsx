@@ -113,8 +113,11 @@ export function CheckInClient({
 
   return (
     <div className="space-y-3">
-      {/* 固定ヘッダー: 礼拝情報＋リアルタイム合計＋同期状態 */}
-      <div className="sticky top-[88px] z-20 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      {/* イベント情報・検索・フィルターまでを固定し、人物一覧だけスクロールさせる。
+          Nav(高さ108px・sticky)の直下に貼り付ける。 */}
+      <div className="sticky top-[108px] z-20 -mx-3 space-y-3 bg-slate-100 px-3 pb-2 sm:-mx-5 sm:px-5">
+      {/* 礼拝情報＋リアルタイム合計＋同期状態 */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate text-base font-bold text-slate-900">{event.name}</p>
@@ -196,6 +199,8 @@ export function CheckInClient({
           </button>
         ))}
       </div>
+      </div>
+      {/* ── 固定ブロックここまで。以下の人物一覧だけがスクロールする ── */}
 
       {/* 人物一覧 */}
       <ul className="space-y-2">
