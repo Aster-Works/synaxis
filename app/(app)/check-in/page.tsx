@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { getActiveChurch } from '@/app/lib/auth';
 import { createSupabaseServerClient } from '@/app/lib/supabase/server';
 import {
-  getTodayEvents,
+  getReceptionEvents,
   pickCurrentEvent,
   getReceptionRows,
 } from '@/app/lib/reception';
@@ -21,11 +21,7 @@ export default async function CheckInPage({
 
   const canEdit = ['owner', 'admin', 'receptionist'].includes(active.role);
   const supabase = await createSupabaseServerClient();
-  const events = await getTodayEvents(
-    supabase,
-    active.church_id,
-    active.church.timezone,
-  );
+  const events = await getReceptionEvents(supabase, active.church_id);
 
   const selected =
     (eventParam && events.find((e) => e.id === eventParam)) ||
@@ -35,10 +31,11 @@ export default async function CheckInPage({
     return (
       <div className="mx-auto mt-10 max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center">
         <h1 className="text-lg font-semibold text-slate-900">
-          本日の礼拝がありません
+          受付できる礼拝がありません
         </h1>
         <p className="mt-2 text-sm text-slate-500">
-          受付を始めるには、まず礼拝イベントを作成してください。
+          受付を始めるには「礼拝」から礼拝を作成してください。
+          「すぐ受付中にする」を選ぶと、日付に関係なくここに表示されます。
         </p>
         {['owner', 'admin'].includes(active.role) ? (
           <Link

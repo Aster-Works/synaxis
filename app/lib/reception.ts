@@ -28,7 +28,29 @@ export async function getTodayEvents(
   return data as ServiceEvent[];
 }
 
-// 現在時刻に最も近い「本日の礼拝」。'open' を優先し、なければ最も近いもの。
+// 受付で選べる礼拝。受付中(open)はいつでも、加えて前後の窓（既定±14日）の礼拝も含める。
+// 「今日」だけに縛らないことで、事前に作成した礼拝も受付から到達できる。
+export async function getReceptionEvents(
+  supabase: SupabaseClient,
+  churchId: string,
+  windowDays = 14,
+): Promise<ServiceEvent[]> {
+  const now = Date.now();
+  const since = new Date(now - windowDays * 86400000).toISOString();
+  const until = new Date(now + windowDays * 86400000).toISOString();
+  const { data, error } = await supabase
+    .from('service_events')
+    .select('*')
+    .eq('church_id', churchId)
+    .neq('status', 'cancelled')
+    .or(`status.eq.open,and(starts_at.gte.${since},starts_at.lte.${until})`)
+    .order('starts_at', { ascending: true });
+
+  if (error || !data) return [];
+  return data as ServiceEvent[];
+}
+
+// 現在時刻に最も近い礼拝。'open' を優先し、なければ最も近いもの。
 export function pickCurrentEvent(
   events: ServiceEvent[],
   now: Date = new Date(),

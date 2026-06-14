@@ -166,7 +166,8 @@ export function CheckInClient({
                   : 'bg-white text-slate-600 ring-1 ring-slate-200'
               }`}
             >
-              {e.name}（{formatTimeInZone(e.starts_at, timezone)}）
+              {e.name}（{formatDateInZone(e.starts_at, timezone)}{' '}
+              {formatTimeInZone(e.starts_at, timezone)}）
             </button>
           ))}
         </div>
