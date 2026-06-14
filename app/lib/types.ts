@@ -133,3 +133,69 @@ export const PERIOD_LABELS: Record<Period, string> = {
   '6m': '直近半年',
   all: '全期間',
 };
+
+// ── 期間集計（Phase 3。aggregate.ts / people-stats.ts が生成）──────────────
+
+export interface ReportFilter {
+  period: Period;
+  kinds: ServiceKind[] | 'all';
+  ratedOnly: boolean;
+}
+
+export interface PeriodEventReport {
+  event: ServiceEvent;
+  present: number;
+  adults: number;
+  children: number;
+  unknownAge: number;
+  lunch: number;
+  byRelationship: Record<RelationshipStatus, number>;
+}
+
+export interface KindTotal {
+  events: number;
+  present: number;
+  lunch: number;
+}
+
+export interface PeriodTotals {
+  events: number;
+  ratedEvents: number;
+  present: number;
+  adults: number;
+  children: number;
+  unknownAge: number;
+  lunch: number;
+  byRelationship: Record<RelationshipStatus, number>;
+  byKind: Record<ServiceKind, KindTotal>;
+  ratedPresent: number; // counts_toward_attendance_rate=true のイベント出席延べ
+  avgAttendance: number; // ratedPresent / ratedEvents（小数1桁）
+}
+
+export interface TrendPoint {
+  weekStart: string; // 教会ローカル週初め YYYY-MM-DD
+  present: number;
+  adults: number;
+  children: number;
+}
+
+export interface PeriodReport {
+  filter: ReportFilter;
+  eventReports: PeriodEventReport[]; // 新しい順
+  totals: PeriodTotals;
+  trend: TrendPoint[]; // 週昇順
+}
+
+export interface PersonPresence {
+  personId: string;
+  displayName: string;
+  furigana: string | null;
+  relationship: RelationshipStatus;
+  ageGroup: AgeGroup;
+  count: number; // 期間内・フィルタ後の出席回数
+  ratedCount: number; // rated イベント出席回数
+  rate: number; // ratedCount / 期間内 rated イベント総数（0..1）
+  firstOn: string | null; // 教会ローカル日付（first_visit_on 優先、無ければ min(checked_in_at)）
+  lastOn: string | null; // max(checked_in_at) のローカル日付
+  isNewGuest: boolean; // guest かつ 期間内の出席が1回のみ
+}

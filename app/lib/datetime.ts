@@ -75,6 +75,27 @@ export function zonedDateTimeToUtcISO(local: string, timeZone: string): string {
   return new Date(asUtc.getTime() - offset).toISOString();
 }
 
+// 指定タイムゾーンでのローカル日付 YYYY-MM-DD。
+export function zonedDateOf(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(iso));
+}
+
+// 教会ローカルでの「週初め」YYYY-MM-DD（weekStartsOn=0 で日曜起点）。
+// 推移グラフの週バケットに使う。UTC ではなくローカル日付から算出する。
+export function zonedWeekStart(iso: string, timeZone: string, weekStartsOn = 0): string {
+  const d = zonedDateOf(iso, timeZone);
+  const dow = new Date(`${d}T00:00:00Z`).getUTCDay();
+  const diff = (dow - weekStartsOn + 7) % 7;
+  const ws = new Date(`${d}T00:00:00Z`);
+  ws.setUTCDate(ws.getUTCDate() - diff);
+  return ws.toISOString().slice(0, 10);
+}
+
 // 礼拝の日付を「M月D日(曜)」で表示する。
 export function formatDateInZone(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat('ja-JP', {
