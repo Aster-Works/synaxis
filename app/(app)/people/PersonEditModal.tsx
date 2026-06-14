@@ -107,7 +107,7 @@ export function PersonEditModal({
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">フリガナ</label>
+              <label className="mb-1 block text-xs font-medium text-slate-600">ふりがな</label>
               <input
                 value={furigana}
                 onChange={(e) => setFurigana(e.target.value)}

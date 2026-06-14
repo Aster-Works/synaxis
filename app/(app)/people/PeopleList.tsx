@@ -45,7 +45,7 @@ export function PeopleList({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="名前・フリガナで検索"
+          placeholder="名前・ふりがなで検索"
           className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
         />
       </div>

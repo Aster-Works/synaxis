@@ -67,7 +67,7 @@ export function AddPersonForm({ childLabel }: { childLabel: string }) {
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">
-            フリガナ
+            ふりがな
           </label>
           <input
             name="furigana"
