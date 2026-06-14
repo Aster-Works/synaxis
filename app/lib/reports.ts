@@ -37,13 +37,15 @@ function periodStart(period: Period): Date {
   return d;
 }
 
-export async function getPeriodReport(
+// 期間集計を「ユニーク」「延べ」両方まとめて返す（DB取得は1回・集計のみ2回）。
+// クライアント側で集計方法を即時切替するため、両モードを一度に算出する。
+export async function getPeriodReportModes(
   supabase: SupabaseClient,
   churchId: string,
   timezone: string,
   filter: ReportFilterInput,
   bounds?: RangeBounds,
-): Promise<PeriodReport> {
+): Promise<{ unique: PeriodReport; total: PeriodReport }> {
   let q = supabase
     .from('service_events')
     .select('*')
@@ -70,30 +72,44 @@ export async function getPeriodReport(
     attendance = (data ?? []) as any;
   }
 
-  const report = summarizePeriod({
-    events,
-    attendance,
-    timezone,
-    countMode: filter.countMode,
-  });
-  return {
-    ...report,
-    filter: {
-      period: filter.period,
-      kinds: filter.kinds.length ? filter.kinds : 'all',
-      ratedOnly: filter.ratedOnly,
-      countMode: filter.countMode,
-    },
+  const make = (countMode: CountMode): PeriodReport => {
+    const report = summarizePeriod({ events, attendance, timezone, countMode });
+    return {
+      ...report,
+      filter: {
+        period: filter.period,
+        kinds: filter.kinds.length ? filter.kinds : 'all',
+        ratedOnly: filter.ratedOnly,
+        countMode,
+      },
+    };
   };
+  return { unique: make('unique'), total: make('total') };
 }
 
-export async function getPeopleStats(
+export async function getPeriodReport(
   supabase: SupabaseClient,
   churchId: string,
   timezone: string,
   filter: ReportFilterInput,
   bounds?: RangeBounds,
-): Promise<{ ratedEventCount: number; people: PersonPresence[] }> {
+): Promise<PeriodReport> {
+  const both = await getPeriodReportModes(supabase, churchId, timezone, filter, bounds);
+  return filter.countMode === 'total' ? both.total : both.unique;
+}
+
+// 人物別統計を「ユニーク」「延べ」両方まとめて返す（DB取得は1回・集計のみ2回）。
+export async function getPeopleStatsModes(
+  supabase: SupabaseClient,
+  churchId: string,
+  timezone: string,
+  filter: ReportFilterInput,
+  bounds?: RangeBounds,
+): Promise<{
+  ratedEventCount: number;
+  unique: PersonPresence[];
+  total: PersonPresence[];
+}> {
   let eventsQ = supabase
     .from('service_events')
     .select('id, starts_at, counts_toward_attendance_rate')
@@ -155,15 +171,30 @@ export async function getPeopleStats(
     );
   }
 
-  const stats = summarizePeoplePresence({
-    people,
-    attendance,
-    ratedDayCount,
-    ratedEventCount,
-    countMode: filter.countMode,
-    timezone,
-  });
-  return { ratedEventCount, people: stats };
+  const make = (countMode: CountMode) =>
+    summarizePeoplePresence({
+      people,
+      attendance,
+      ratedDayCount,
+      ratedEventCount,
+      countMode,
+      timezone,
+    });
+  return { ratedEventCount, unique: make('unique'), total: make('total') };
+}
+
+export async function getPeopleStats(
+  supabase: SupabaseClient,
+  churchId: string,
+  timezone: string,
+  filter: ReportFilterInput,
+  bounds?: RangeBounds,
+): Promise<{ ratedEventCount: number; people: PersonPresence[] }> {
+  const both = await getPeopleStatsModes(supabase, churchId, timezone, filter, bounds);
+  return {
+    ratedEventCount: both.ratedEventCount,
+    people: filter.countMode === 'total' ? both.total : both.unique,
+  };
 }
 
 // 出席マトリクス（CSV「出席マトリクス」用）。行=人物・列=礼拝・値=出席有無。
