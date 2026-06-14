@@ -8,10 +8,13 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getCurrentUser();
+  // 認証ユーザーと所属教会は互いに独立に取得できる（所属クエリは RLS で絞られる）。
+  // 直列にせず並列で取り、ナビ毎の往復を1段に減らす。
+  const [user, active] = await Promise.all([
+    getCurrentUser(),
+    getActiveChurch(),
+  ]);
   if (!user) redirect('/login');
-
-  const active = await getActiveChurch();
   if (!active) redirect('/onboarding');
 
   return (

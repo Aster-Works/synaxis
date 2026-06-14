@@ -37,16 +37,20 @@ export default async function DashboardPage({
   const tz = active.church.timezone;
   const supabase = await createSupabaseServerClient();
 
-  const todayEvents = await getTodayEvents(supabase, active.church_id, tz);
+  // 互いに独立した集計は並列取得（東京リージョンでも往復を直列に積まない）。
+  const [todayEvents, report, peopleStats] = await Promise.all([
+    getTodayEvents(supabase, active.church_id, tz),
+    getPeriodReport(supabase, active.church_id, tz, filter),
+    getPeopleStats(supabase, active.church_id, tz, filter),
+  ]);
+  // 本日カードは todayEvents に依存するためその後に（各行は並列）。
   const todayCards = await Promise.all(
     todayEvents.map(async (event) => {
       const rows = await getReceptionRows(supabase, active.church_id, event.id);
       return { event, summary: summarizeReception(rows) };
     }),
   );
-
-  const report = await getPeriodReport(supabase, active.church_id, tz, filter);
-  const { people } = await getPeopleStats(supabase, active.church_id, tz, filter);
+  const { people } = peopleStats;
   const t = report.totals;
   const unique = report.filter.countMode === 'unique'; // 集計方法（1日1人1回 / 延べ）
 
