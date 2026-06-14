@@ -69,6 +69,26 @@ export async function runSheetsExport(
         p_year: year,
         p_spreadsheet_id: sid,
       });
+    } else {
+      // 既存ファイルに無いタブを追加（タブ構成の変更に追従。旧タブは残置）。
+      const meta = await sheets.spreadsheets.get({
+        spreadsheetId: sid,
+        fields: 'sheets.properties.title',
+      });
+      const existing = new Set(
+        (meta.data.sheets ?? []).map((s) => s.properties?.title),
+      );
+      const toAdd = values.tabs.filter((t) => !existing.has(t.title));
+      if (toAdd.length > 0) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: sid,
+          requestBody: {
+            requests: toAdd.map((t) => ({
+              addSheet: { properties: { title: t.title } },
+            })),
+          },
+        });
+      }
     }
     // 各タブを全置換（同一年度は既存ファイルを更新。減った行が残らないよう clear）
     for (const tab of values.tabs) {
