@@ -70,6 +70,13 @@ export const upsertPersonSchema = z.object({
   firstVisitOn: z.string().date().optional(),
 });
 
+// POST /api/people/:personId/merge （重複人物の統合）
+// source は URL パス、target はボディ。同一判定は API/RPC の二重で弾く。
+export const mergePersonSchema = z.object({
+  targetId: z.string().uuid(),
+});
+
+export type MergePersonInput = z.infer<typeof mergePersonSchema>;
 export type PutAttendanceInput = z.infer<typeof putAttendanceSchema>;
 export type CreateGuestInput = z.infer<typeof createGuestSchema>;
 export type CreateEventInput = z.infer<typeof createEventSchema>;

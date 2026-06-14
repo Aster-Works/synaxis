@@ -1,16 +1,26 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Search, Combine } from 'lucide-react';
 import {
   AGE_GROUP_LABELS,
   RELATIONSHIP_BADGE,
   RELATIONSHIP_LABELS,
   type Person,
 } from '@/app/lib/types';
+import { MergeModal } from './MergeModal';
 
-export function PeopleList({ people }: { people: Person[] }) {
+export function PeopleList({
+  people,
+  canMerge = false,
+}: {
+  people: Person[];
+  canMerge?: boolean;
+}) {
+  const router = useRouter();
   const [query, setQuery] = useState('');
+  const [mergeSource, setMergeSource] = useState<Person | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -61,6 +71,16 @@ export function PeopleList({ people }: { people: Person[] }) {
               >
                 {RELATIONSHIP_LABELS[p.relationship_status]}
               </span>
+              {canMerge && (
+                <button
+                  onClick={() => setMergeSource(p)}
+                  className="flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  aria-label={`${p.display_name} を統合`}
+                  title="この人を別の人物に統合"
+                >
+                  <Combine className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </li>
         ))}
@@ -70,6 +90,18 @@ export function PeopleList({ people }: { people: Person[] }) {
           </li>
         )}
       </ul>
+
+      {mergeSource && (
+        <MergeModal
+          source={mergeSource}
+          people={people}
+          onClose={() => setMergeSource(null)}
+          onMerged={() => {
+            setMergeSource(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -15,11 +15,12 @@ export default async function PeoplePage() {
     .is('archived_at', null)
     .order('furigana', { ascending: true, nullsFirst: false });
   const people = (data ?? []) as Person[];
+  const canMerge = ['owner', 'admin'].includes(active.role);
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-slate-900">人物</h1>
-      <PeopleList people={people} />
+      <PeopleList people={people} canMerge={canMerge} />
     </div>
   );
 }

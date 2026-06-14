@@ -89,4 +89,6 @@ begin
 end;
 $$;
 
+-- 既定で PUBLIC に付く EXECUTE を剥奪し、authenticated のみに限定する。
+revoke all on function public.create_church(text, text) from public;
 grant execute on function public.create_church(text, text) to authenticated;

@@ -60,10 +60,12 @@ export default async function CheckInPage({
 
   return (
     <CheckInClient
+      key={selected.id}
       event={selected}
       events={events}
       initialRows={rows}
       canEdit={canEdit}
+      churchId={active.church_id}
       timezone={active.church.timezone}
       childLabel={active.church.child_label}
     />

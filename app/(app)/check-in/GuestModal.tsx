@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
-import type { AgeGroup, AttendanceRecord, Person } from '@/app/lib/types';
+import type { AgeGroup, Person } from '@/app/lib/types';
+import { matchDuplicateCandidates, type DuplicateCandidate } from '@/app/lib/dedupe';
 
 const AGE_OPTIONS: { value: AgeGroup; label: string }[] = [
   { value: 'adult', label: '大人' },
@@ -10,55 +11,68 @@ const AGE_OPTIONS: { value: AgeGroup; label: string }[] = [
   { value: 'unknown', label: '不明' },
 ];
 
+export interface GuestInput {
+  displayName: string;
+  furigana?: string;
+  ageGroup: AgeGroup;
+  relationshipStatus: 'guest';
+  lunchQuantity: number;
+}
+
 export function GuestModal({
-  eventId,
   lunchEnabled,
   childLabel,
+  people,
   onClose,
-  onAdded,
+  onAddGuest,
+  onAttendExisting,
 }: {
-  eventId: string;
   lunchEnabled: boolean;
   childLabel: string;
+  people: Person[];
   onClose: () => void;
-  onAdded: (person: Person, attendance: AttendanceRecord | null) => void;
+  onAddGuest: (input: GuestInput) => void;
+  onAttendExisting: (person: Person, lunchQuantity: number) => void;
 }) {
   const [displayName, setDisplayName] = useState('');
   const [furigana, setFurigana] = useState('');
   const [ageGroup, setAgeGroup] = useState<AgeGroup>('adult');
   const [lunch, setLunch] = useState(0);
-  const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [candidates, setCandidates] = useState<DuplicateCandidate[]>([]);
 
-  async function submit(e: React.FormEvent) {
+  // 名前入力をデバウンスして重複候補を算出（クライアント照合・純関数）
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!displayName.trim() && !furigana.trim()) {
+        setCandidates([]);
+        return;
+      }
+      setCandidates(
+        matchDuplicateCandidates({ displayName, furigana }, people, {
+          threshold: 0.7,
+          limit: 5,
+        }),
+      );
+    }, 200);
+    return () => clearTimeout(t);
+  }, [displayName, furigana, people]);
+
+  const lunchQty = useMemo(() => (lunchEnabled ? lunch : 0), [lunchEnabled, lunch]);
+
+  function submitNew(e: React.FormEvent) {
     e.preventDefault();
     if (!displayName.trim()) {
       setError('名前を入力してください（不明なら仮の名前で可）');
       return;
     }
-    setPending(true);
-    setError('');
-
-    const res = await fetch(`/api/events/${eventId}/guests`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        displayName: displayName.trim(),
-        furigana: furigana.trim() || undefined,
-        ageGroup,
-        relationshipStatus: 'guest',
-        lunchQuantity: lunchEnabled ? lunch : 0,
-      }),
+    onAddGuest({
+      displayName: displayName.trim(),
+      furigana: furigana.trim() || undefined,
+      ageGroup,
+      relationshipStatus: 'guest',
+      lunchQuantity: lunchQty,
     });
-
-    setPending(false);
-    if (res.ok || res.status === 207) {
-      const { person, attendance } = await res.json();
-      onAdded(person as Person, (attendance ?? null) as AttendanceRecord | null);
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? 'ゲストの追加に失敗しました');
-    }
   }
 
   return (
@@ -67,7 +81,7 @@ export function GuestModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-t-2xl bg-white p-5 sm:rounded-2xl"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -81,7 +95,7 @@ export function GuestModal({
           </button>
         </div>
 
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={submitNew} className="space-y-3">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
               名前 <span className="text-rose-500">*</span>
@@ -107,10 +121,45 @@ export function GuestModal({
             />
           </div>
 
+          {/* 重複候補（既にいる人なら出席にできる） */}
+          {candidates.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5">
+              <p className="mb-1.5 text-xs font-medium text-amber-800">
+                この方ではありませんか？（既にいる方なら出席にできます）
+              </p>
+              <ul className="space-y-1.5">
+                {candidates.map((c) => (
+                  <li key={c.person.id}>
+                    <button
+                      type="button"
+                      onClick={() => onAttendExisting(c.person as Person, lunchQty)}
+                      className="flex w-full items-center justify-between rounded-lg bg-white px-3 py-2 text-left ring-1 ring-amber-200 active:scale-[0.99]"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-slate-900">
+                          {c.person.display_name}
+                        </span>
+                        {c.person.furigana && (
+                          <span className="block truncate text-[11px] text-slate-400">
+                            {c.person.furigana}
+                          </span>
+                        )}
+                      </span>
+                      <span className="ml-2 shrink-0 text-xs font-semibold text-amber-700">
+                        この人を出席に
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-[11px] text-amber-700/80">
+                別人なら、下のボタンで新規ゲストとして追加してください。
+              </p>
+            </div>
+          )}
+
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              区分
-            </label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">区分</label>
             <div className="flex gap-1.5">
               {AGE_OPTIONS.map((opt) => (
                 <button
@@ -131,9 +180,7 @@ export function GuestModal({
 
           {lunchEnabled && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                昼食数
-              </label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">昼食数</label>
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -142,9 +189,7 @@ export function GuestModal({
                 >
                   −
                 </button>
-                <span className="w-10 text-center text-lg font-bold tabular-nums">
-                  {lunch}
-                </span>
+                <span className="w-10 text-center text-lg font-bold tabular-nums">{lunch}</span>
                 <button
                   type="button"
                   onClick={() => setLunch((n) => Math.min(20, n + 1))}
@@ -164,10 +209,9 @@ export function GuestModal({
 
           <button
             type="submit"
-            disabled={pending}
-            className="w-full rounded-xl bg-indigo-600 py-3.5 text-base font-bold text-white active:scale-[0.99] disabled:opacity-60"
+            className="w-full rounded-xl bg-indigo-600 py-3.5 text-base font-bold text-white active:scale-[0.99]"
           >
-            {pending ? '追加中…' : '追加して出席にする'}
+            {candidates.length > 0 ? '新規ゲストとして追加' : '追加して出席にする'}
           </button>
         </form>
       </div>

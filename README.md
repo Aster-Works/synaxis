@@ -104,7 +104,7 @@ churches ─┬─ church_memberships ─ auth.users(profiles)
 
 - [x] **Phase 0** ベースライン確立（足場・設定・ローカル DB・テスト基盤・CI）
 - [x] **Phase 1** 安全なマルチテナント基盤（Auth/SSR・RLS・新スキーマ・移行スクリプト）
-- [ ] Phase 2 日曜運用 MVP
+- [x] **Phase 2** 日曜運用 MVP（Realtime 複数端末同期・オフライン再試行キュー・重複候補検出・人物統合）
 - [ ] Phase 3 集計・移行・Google Sheets
 - [ ] Phase 4 単一教会パイロット
 - [ ] Phase 5 他教会向けベータ

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useCallback, useTransition } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Check,
@@ -11,11 +11,11 @@ import {
   RotateCcw,
   RefreshCw,
   CloudOff,
+  Wifi,
   X,
 } from 'lucide-react';
 import {
   type AttendanceRecord,
-  type Person,
   type ReceptionRow,
   type ServiceEvent,
   RELATIONSHIP_LABELS,
@@ -24,6 +24,7 @@ import {
 } from '@/app/lib/types';
 import { summarizeReception } from '@/app/lib/aggregate';
 import { formatDateInZone, formatTimeInZone } from '@/app/lib/datetime';
+import { useReceptionSync } from './useReceptionSync';
 import { GuestModal } from './GuestModal';
 
 type Filter = 'all' | 'present' | 'absent' | 'guest';
@@ -35,25 +36,12 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'guest', label: 'ゲスト' },
 ];
 
-// ネットワーク失敗時に一度だけ再試行する fetch。
-async function postJSON(url: string, method: string, body?: unknown) {
-  const opts: RequestInit = {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  };
-  try {
-    return await fetch(url, opts);
-  } catch {
-    return await fetch(url, opts);
-  }
-}
-
 export function CheckInClient({
   event,
   events,
   initialRows,
   canEdit,
+  churchId,
   timezone,
   childLabel,
 }: {
@@ -61,23 +49,24 @@ export function CheckInClient({
   events: ServiceEvent[];
   initialRows: ReceptionRow[];
   canEdit: boolean;
+  churchId: string;
   timezone: string;
   childLabel: string;
 }) {
   const router = useRouter();
-  const [rows, setRows] = useState<ReceptionRow[]>(initialRows);
+  const sync = useReceptionSync(event.id, churchId, initialRows);
+  const { rows, pendingIds } = sync;
+
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
-  const [syncing, setSyncing] = useState<Set<string>>(new Set());
-  const [errored, setErrored] = useState<Set<string>>(new Set());
   const [lastAction, setLastAction] = useState<{
     personId: string;
     prev: AttendanceRecord | null;
   } | null>(null);
   const [guestOpen, setGuestOpen] = useState(false);
-  const [, startTransition] = useTransition();
 
   const summary = useMemo(() => summarizeReception(rows), [rows]);
+  const people = useMemo(() => rows.map((r) => r.person), [rows]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -93,154 +82,34 @@ export function CheckInClient({
     });
   }, [rows, query, filter]);
 
-  const mark = useCallback(
-    (set: React.Dispatch<React.SetStateAction<Set<string>>>, id: string, on: boolean) => {
-      set((prev) => {
-        const next = new Set(prev);
-        if (on) next.add(id);
-        else next.delete(id);
-        return next;
-      });
-    },
-    [],
-  );
-
-  const setAttendance = useCallback(
-    (personId: string, attendance: AttendanceRecord | null) => {
-      setRows((prev) =>
-        prev.map((r) => (r.person.id === personId ? { ...r, attendance } : r)),
-      );
-    },
-    [],
-  );
-
-  // 出席させ、昼食数を確定する（冪等 PUT）。楽観的更新＋失敗時ロールバック。
-  const putAttendance = useCallback(
-    async (person: Person, lunchQuantity: number, recordUndo = true) => {
-      const current = rows.find((r) => r.person.id === person.id)?.attendance ?? null;
-      if (recordUndo) setLastAction({ personId: person.id, prev: current });
-
-      const optimistic: AttendanceRecord = {
-        id: current?.id ?? `optimistic-${person.id}`,
-        church_id: person.church_id,
-        service_event_id: event.id,
-        person_id: person.id,
-        lunch_quantity: lunchQuantity,
-        checked_in_at: current?.checked_in_at ?? new Date().toISOString(),
-        checked_in_by: current?.checked_in_by ?? null,
-        source: 'reception',
-        created_at: current?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setAttendance(person.id, optimistic);
-      mark(setSyncing, person.id, true);
-      mark(setErrored, person.id, false);
-
-      const res = await postJSON(
-        `/api/events/${event.id}/attendance/${person.id}`,
-        'PUT',
-        { lunchQuantity },
-      );
-      mark(setSyncing, person.id, false);
-
-      if (res.ok) {
-        const { attendance } = await res.json();
-        setAttendance(person.id, attendance as AttendanceRecord);
-      } else {
-        setAttendance(person.id, current); // ロールバック
-        mark(setErrored, person.id, true);
-      }
-    },
-    [rows, event.id, setAttendance, mark],
-  );
-
-  const removeAttendance = useCallback(
-    async (person: Person, recordUndo = true) => {
-      const current = rows.find((r) => r.person.id === person.id)?.attendance ?? null;
-      if (recordUndo) setLastAction({ personId: person.id, prev: current });
-
-      setAttendance(person.id, null);
-      mark(setSyncing, person.id, true);
-      mark(setErrored, person.id, false);
-
-      const res = await postJSON(
-        `/api/events/${event.id}/attendance/${person.id}`,
-        'DELETE',
-      );
-      mark(setSyncing, person.id, false);
-
-      if (!res.ok) {
-        setAttendance(person.id, current);
-        mark(setErrored, person.id, true);
-      }
-    },
-    [rows, event.id, setAttendance, mark],
-  );
-
   const toggle = useCallback(
     (row: ReceptionRow) => {
       if (!canEdit) return;
-      if (row.attendance) removeAttendance(row.person);
-      else putAttendance(row.person, 0);
+      setLastAction({ personId: row.person.id, prev: row.attendance });
+      if (row.attendance) sync.enqueueDelete(row.person);
+      else sync.enqueuePut(row.person, 0);
     },
-    [canEdit, putAttendance, removeAttendance],
+    [canEdit, sync],
   );
 
   const changeLunch = useCallback(
     (row: ReceptionRow, delta: number) => {
       if (!canEdit || !row.attendance) return;
       const next = Math.max(0, Math.min(20, row.attendance.lunch_quantity + delta));
-      putAttendance(row.person, next, false);
+      setLastAction({ personId: row.person.id, prev: row.attendance });
+      sync.enqueuePut(row.person, next);
     },
-    [canEdit, putAttendance],
+    [canEdit, sync],
   );
 
   const undo = useCallback(() => {
     if (!lastAction) return;
     const person = rows.find((r) => r.person.id === lastAction.personId)?.person;
     if (!person) return;
-    if (lastAction.prev) {
-      putAttendance(person, lastAction.prev.lunch_quantity, false);
-    } else {
-      removeAttendance(person, false);
-    }
+    if (lastAction.prev) sync.enqueuePut(person, lastAction.prev.lunch_quantity);
+    else sync.enqueueDelete(person);
     setLastAction(null);
-  }, [lastAction, rows, putAttendance, removeAttendance]);
-
-  const refresh = useCallback(async () => {
-    const res = await postJSON(`/api/events/${event.id}/reception`, 'GET');
-    if (res.ok) {
-      const { rows: fresh } = await res.json();
-      setRows(fresh as ReceptionRow[]);
-      setErrored(new Set());
-    }
-  }, [event.id]);
-
-  const retryErrored = useCallback(() => {
-    for (const id of errored) {
-      const row = rows.find((r) => r.person.id === id);
-      if (!row) continue;
-      if (row.attendance) putAttendance(row.person, row.attendance.lunch_quantity, false);
-      else removeAttendance(row.person, false);
-    }
-  }, [errored, rows, putAttendance, removeAttendance]);
-
-  const onGuestAdded = useCallback(
-    (person: Person, attendance: AttendanceRecord | null) => {
-      setRows((prev) => {
-        const next = [...prev, { person, attendance }];
-        next.sort((a, b) =>
-          (a.person.furigana ?? a.person.display_name).localeCompare(
-            b.person.furigana ?? b.person.display_name,
-            'ja',
-          ),
-        );
-        return next;
-      });
-      setGuestOpen(false);
-    },
-    [],
-  );
+  }, [lastAction, rows, sync]);
 
   return (
     <div className="space-y-3">
@@ -248,9 +117,7 @@ export function CheckInClient({
       <div className="sticky top-[88px] z-20 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="truncate text-base font-bold text-slate-900">
-              {event.name}
-            </p>
+            <p className="truncate text-base font-bold text-slate-900">{event.name}</p>
             <p className="text-xs text-slate-500">
               {formatDateInZone(event.starts_at, timezone)}{' '}
               {formatTimeInZone(event.starts_at, timezone)} ·{' '}
@@ -258,23 +125,15 @@ export function CheckInClient({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {syncing.size > 0 && (
-              <span className="flex items-center gap-1 text-xs text-amber-600">
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                同期中 {syncing.size}
-              </span>
-            )}
-            {errored.size > 0 && (
-              <button
-                onClick={retryErrored}
-                className="flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700"
-              >
-                <CloudOff className="h-3.5 w-3.5" />
-                未同期 {errored.size}・再試行
-              </button>
-            )}
+            <SyncStatus
+              online={sync.online}
+              realtime={sync.realtimeConnected}
+              flushing={sync.flushing}
+              pending={sync.pendingCount}
+              onRetry={sync.flushNow}
+            />
             <button
-              onClick={() => startTransition(refresh)}
+              onClick={() => void sync.refetch()}
               className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"
               aria-label="最新の状態に更新"
             >
@@ -346,8 +205,7 @@ export function CheckInClient({
             row={row}
             canEdit={canEdit}
             lunchEnabled={event.lunch_enabled}
-            syncing={syncing.has(row.person.id)}
-            errored={errored.has(row.person.id)}
+            pending={pendingIds.has(row.person.id)}
             onToggle={() => toggle(row)}
             onLunch={(delta) => changeLunch(row, delta)}
           />
@@ -386,14 +244,68 @@ export function CheckInClient({
 
       {guestOpen && (
         <GuestModal
-          eventId={event.id}
           lunchEnabled={event.lunch_enabled}
           childLabel={childLabel}
+          people={people}
           onClose={() => setGuestOpen(false)}
-          onAdded={onGuestAdded}
+          onAddGuest={(input) => {
+            sync.enqueueGuest(input);
+            setGuestOpen(false);
+          }}
+          onAttendExisting={(person, lunch) => {
+            // 既に出席済みの人物を候補から選んだ場合、取消で既存出席を消さない
+            // よう、現在の出席状態を prev として保持する。
+            const cur = rows.find((r) => r.person.id === person.id)?.attendance ?? null;
+            setLastAction({ personId: person.id, prev: cur });
+            sync.enqueuePut(person, lunch);
+            setGuestOpen(false);
+          }}
         />
       )}
     </div>
+  );
+}
+
+function SyncStatus({
+  online,
+  realtime,
+  flushing,
+  pending,
+  onRetry,
+}: {
+  online: boolean;
+  realtime: boolean;
+  flushing: boolean;
+  pending: number;
+  onRetry: () => void;
+}) {
+  if (!online) {
+    return (
+      <span className="flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+        <CloudOff className="h-3.5 w-3.5" />
+        オフライン{pending > 0 ? `・未同期 ${pending}` : ''}
+      </span>
+    );
+  }
+  if (pending > 0) {
+    return (
+      <button
+        onClick={onRetry}
+        className="flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700"
+      >
+        <RefreshCw className={`h-3.5 w-3.5 ${flushing ? 'animate-spin' : ''}`} />
+        未同期 {pending}・再送
+      </button>
+    );
+  }
+  return (
+    <span
+      className="flex items-center gap-1 text-xs text-slate-400"
+      title={realtime ? 'リアルタイム同期中' : '同期済み'}
+    >
+      <Wifi className={`h-3.5 w-3.5 ${realtime ? 'text-emerald-500' : ''}`} />
+      <span className="hidden sm:inline">{realtime ? '同期中' : '同期済み'}</span>
+    </span>
   );
 }
 
@@ -407,11 +319,7 @@ function Stat({
   highlight?: boolean;
 }) {
   return (
-    <div
-      className={`rounded-xl px-1 py-1.5 ${
-        highlight ? 'bg-indigo-50' : 'bg-slate-50'
-      }`}
-    >
+    <div className={`rounded-xl px-1 py-1.5 ${highlight ? 'bg-indigo-50' : 'bg-slate-50'}`}>
       <p
         className={`text-xl font-bold tabular-nums ${
           highlight ? 'text-indigo-700' : 'text-slate-800'
@@ -428,16 +336,14 @@ function PersonRow({
   row,
   canEdit,
   lunchEnabled,
-  syncing,
-  errored,
+  pending,
   onToggle,
   onLunch,
 }: {
   row: ReceptionRow;
   canEdit: boolean;
   lunchEnabled: boolean;
-  syncing: boolean;
-  errored: boolean;
+  pending: boolean;
   onToggle: () => void;
   onLunch: (delta: number) => void;
 }) {
@@ -445,28 +351,25 @@ function PersonRow({
   const present = !!attendance;
 
   return (
-    <li
-      className={`flex items-center gap-2 rounded-xl border bg-white p-2.5 ${
-        errored ? 'border-rose-300' : 'border-slate-200'
-      }`}
-    >
+    <li className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5">
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-medium text-slate-900">
           {person.display_name}
         </p>
         <div className="mt-0.5 flex items-center gap-1.5">
           {person.furigana && (
-            <span className="truncate text-[11px] text-slate-400">
-              {person.furigana}
-            </span>
+            <span className="truncate text-[11px] text-slate-400">{person.furigana}</span>
           )}
           <span
             className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ${RELATIONSHIP_BADGE[person.relationship_status]}`}
           >
             {RELATIONSHIP_LABELS[person.relationship_status]}
           </span>
-          {errored && (
-            <span className="text-[10px] font-medium text-rose-600">未同期</span>
+          {pending && (
+            <span className="flex items-center gap-0.5 text-[10px] font-medium text-amber-600">
+              <RefreshCw className="h-3 w-3 animate-spin" />
+              未同期
+            </span>
           )}
         </div>
       </div>
@@ -501,9 +404,7 @@ function PersonRow({
         disabled={!canEdit}
         aria-pressed={present}
         className={`flex h-12 min-w-[88px] items-center justify-center gap-1.5 rounded-xl text-sm font-bold transition active:scale-95 disabled:opacity-50 ${
-          present
-            ? 'bg-emerald-500 text-white'
-            : 'bg-white text-slate-500 ring-2 ring-slate-200'
+          present ? 'bg-emerald-500 text-white' : 'bg-white text-slate-500 ring-2 ring-slate-200'
         }`}
       >
         {present ? (
@@ -517,7 +418,6 @@ function PersonRow({
             未
           </>
         )}
-        {syncing && <RefreshCw className="h-3.5 w-3.5 animate-spin opacity-70" />}
       </button>
     </li>
   );
