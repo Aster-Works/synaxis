@@ -30,7 +30,7 @@ export function AddPersonForm({ childLabel }: { childLabel: string }) {
         className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50 py-3 text-sm font-semibold text-indigo-700"
       >
         <UserPlus className="h-4 w-4" />
-        人物を追加
+        名簿に追加
       </button>
     );
   }
@@ -42,7 +42,7 @@ export function AddPersonForm({ childLabel }: { childLabel: string }) {
       className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4"
     >
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold text-slate-900">人物を追加</h2>
+        <h2 className="font-semibold text-slate-900">名簿に追加</h2>
         <button
           type="button"
           onClick={() => setOpen(false)}

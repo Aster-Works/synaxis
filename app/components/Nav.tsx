@@ -23,7 +23,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/check-in', label: '受付', icon: CalendarCheck, roles: ['owner', 'admin', 'receptionist'] },
-  { href: '/people', label: '人物', icon: Users, roles: ['owner', 'admin', 'receptionist', 'viewer'] },
+  { href: '/people', label: '名簿', icon: Users, roles: ['owner', 'admin', 'receptionist', 'viewer'] },
   { href: '/events', label: '礼拝', icon: CalendarDays, roles: ['owner', 'admin', 'receptionist', 'viewer'] },
   { href: '/dashboard', label: '集計', icon: BarChart3, roles: ['owner', 'admin', 'receptionist', 'viewer'] },
   { href: '/settings', label: '設定', icon: Settings, roles: ['owner', 'admin'] },

@@ -22,7 +22,7 @@ export default async function PeoplePage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-slate-900">人物</h1>
+      <h1 className="text-xl font-bold text-slate-900">名簿</h1>
       {canAdd && <AddPersonForm childLabel={active.church.child_label} />}
       <PeopleList
         people={people}
