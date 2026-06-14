@@ -16,7 +16,11 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-dvh">
-      <Nav churchName={active.church.name} role={active.role} />
+      <Nav
+        churchName={active.church.name}
+        role={active.role}
+        timezone={active.church.timezone}
+      />
       <main className="mx-auto w-full max-w-5xl px-3 pb-24 pt-4 sm:px-5">
         {children}
       </main>
