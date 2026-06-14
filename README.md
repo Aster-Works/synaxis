@@ -1,0 +1,113 @@
+# Synaxis
+
+教会の主日礼拝の **受付（出席チェックイン・昼食集計）** を、紙/Excel の後入力から
+当日入力へ移すモバイル・タブレット優先の Web アプリ。まず単一教会で実運用し、
+その後、教会ごとに個人情報を厳格に分離したマルチテナント SaaS へ拡張する。
+
+> Synaxis（σύναξις）＝「礼拝のための集まり」。
+
+- プロダクト仕様: [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md)
+- ロードマップ: [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- AI エージェント向けガイド / 不変条件: [`AGENTS.md`](AGENTS.md)
+
+## 技術スタック
+
+| 領域 | 採用 |
+|---|---|
+| フレームワーク | Next.js 16.2.6（App Router）/ React 19 |
+| 言語 | TypeScript |
+| スタイル | Tailwind CSS v4 |
+| DB / 認証 | Supabase（Postgres + Auth + RLS）、`@supabase/ssr` |
+| 入力検証 | Zod |
+| テスト | Vitest（単体・コンポーネント）/ pgTAP（DB・RLS）/ Playwright（E2E） |
+| タイムゾーン | `Asia/Tokyo` 前提 |
+
+## 必要環境
+
+- Node.js 20+
+- Docker（ローカル Supabase スタック用）
+- Supabase CLI（`brew install supabase/tap/supabase`）
+
+## セットアップ
+
+```bash
+# 1. 依存をインストール
+npm install
+
+# 2. ローカル Supabase を起動（Docker）。初回はイメージ取得に時間がかかる。
+npm run db:start
+#   → 出力される API URL / anon(publishable) key / service_role(secret) key を控える
+
+# 3. 環境変数を設定
+cp .env.example .env.local
+#   NEXT_PUBLIC_SUPABASE_URL            ← API URL（既定 http://127.0.0.1:54321）
+#   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ← anon / publishable key
+#   SUPABASE_SECRET_KEY                 ← service_role / secret key（管理スクリプト専用）
+
+# 4. マイグレーション + シードを適用
+npm run db:reset
+
+# 5. 開発サーバー
+npm run dev   # http://localhost:3000
+```
+
+ローカルの Supabase Studio は `http://127.0.0.1:54523`、メール確認は Inbucket
+`http://127.0.0.1:54524`（マジックリンクのメールはここに届く）。
+
+> ポートは既定（543xx）から **545xx** にずらしてある（同マシンの他 Supabase
+> プロジェクトとの競合回避のため。`supabase/config.toml` 参照）。
+
+## スクリプト
+
+| コマンド | 内容 |
+|---|---|
+| `npm run dev` | 開発サーバー |
+| `npm run build` | 本番ビルド |
+| `npm run lint` | ESLint |
+| `npm test` | Vitest（単体・コンポーネント） |
+| `npm run test:e2e` | Playwright スモーク E2E（要ローカル起動） |
+| `npm run db:start` / `db:stop` | ローカル Supabase の起動 / 停止 |
+| `npm run db:reset` | migration + seed を再適用（**ローカルのみ**。データは消える） |
+| `npm run db:test` | pgTAP（DB 制約・RLS 教会間分離テスト） |
+| `npm run db:types` | ローカル DB から TypeScript 型を生成 |
+
+## データモデル（概要）
+
+「立場（relationship_status）」と「年齢区分（age_group）」を分離し、礼拝の開催実績を
+`service_events` として保持する。出席は `(service_event_id, person_id)` で一意。
+昼食は当面 `attendance_records.lunch_quantity`。詳細は `docs/PRODUCT_SPEC.md` §8。
+
+```
+churches ─┬─ church_memberships ─ auth.users(profiles)
+          ├─ people
+          ├─ service_events ─┬─ attendance_records ─ people
+          │                  └─ service_templates
+          └─ audit_logs
+```
+
+## セキュリティ不変条件
+
+- 通常処理で `service_role` / secret キーを使わない（秘密鍵は `scripts/` の管理用途のみ）。
+- 公開スキーマ全テーブルで RLS 有効。`anon` に人物・出席データを許可しない。
+- 認可は `church_memberships` を正とする。教会間でデータを読み書きできないことを pgTAP で検証。
+
+詳細は [`AGENTS.md`](AGENTS.md) と `docs/PRODUCT_SPEC.md` §9 を参照。
+
+## バックアップ / 破壊的変更の方針
+
+- migration は **追加型**。破壊的変更（カラム削除・型変更・データ削除）は単独セッションで行わず、
+  事前バックアップとロールバック手順を文書化してから実施する。
+- 本番 Supabase への破壊的 migration・本番データの削除/統合は、必ず管理者（Jimi）の確認後に行う。
+- ローカルは `npm run db:reset` でいつでも初期化できる（データは消える）。
+
+## ロードマップ進捗
+
+- [x] **Phase 0** ベースライン確立（足場・設定・ローカル DB・テスト基盤・CI）
+- [x] **Phase 1** 安全なマルチテナント基盤（Auth/SSR・RLS・新スキーマ・移行スクリプト）
+- [ ] Phase 2 日曜運用 MVP
+- [ ] Phase 3 集計・移行・Google Sheets
+- [ ] Phase 4 単一教会パイロット
+- [ ] Phase 5 他教会向けベータ
+- [ ] Phase 6 課金
+
+詳細は [`docs/ROADMAP.md`](docs/ROADMAP.md)。

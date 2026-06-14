@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family:
+    "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", Meiryo,
+    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* タブレットでの誤操作・テキスト選択を抑制（ボタン主体のUIのため） */
+button {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
