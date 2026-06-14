@@ -11,6 +11,34 @@ export interface EventFormState {
   ok?: boolean;
 }
 
+// 受付画面から礼拝を「開催済み(completed)」にする。
+// 開催済みにすると受付一覧(getReceptionEvents)から外れ、「礼拝」タブからのみ参照できる。
+// 出席・集計には引き続き含まれる（reports は cancelled のみ除外）。RLS: owner/admin。
+export async function completeEventAction(
+  eventId: string,
+): Promise<EventFormState> {
+  const active = await getActiveChurch();
+  if (!active) return { error: '所属教会がありません' };
+  if (!['owner', 'admin'].includes(active.role)) {
+    return { error: '礼拝を変更する権限がありません' };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('service_events')
+    .update({ status: 'completed' })
+    .eq('id', eventId)
+    .eq('church_id', active.church_id) // 多重防御（RLS でも教会越境は不可）
+    .select('id')
+    .maybeSingle();
+
+  if (error || !data) return { error: '開催済みへの変更に失敗しました' };
+
+  revalidatePath('/check-in');
+  revalidatePath('/events');
+  return { ok: true };
+}
+
 export async function createEventAction(
   _prev: EventFormState,
   formData: FormData,

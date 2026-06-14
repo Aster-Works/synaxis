@@ -77,6 +77,17 @@ describe('summarizeReception', () => {
     expect(s.guests).toBe(1);
   });
 
+  it('昼食「少なめ」(0.5) を含めて合算する', () => {
+    const rows: ReceptionRow[] = [
+      { person: person('a', 'member', 'adult'), attendance: attendance('a', 0.5) },
+      { person: person('b', 'member', 'adult'), attendance: attendance('b', 1) },
+      { person: person('c', 'guest', 'child'), attendance: attendance('c', 1.5) },
+    ];
+    const s = summarizeReception(rows);
+    expect(s.present).toBe(3);
+    expect(s.lunchTotal).toBe(3);
+  });
+
   it('全員未出席なら 0', () => {
     const rows: ReceptionRow[] = [
       { person: person('a', 'member', 'adult'), attendance: null },

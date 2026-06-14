@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Check,
@@ -13,6 +13,7 @@ import {
   CloudOff,
   Wifi,
   X,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   type AttendanceRecord,
@@ -26,6 +27,7 @@ import { summarizeReception } from '@/app/lib/aggregate';
 import { formatDateInZone, formatTimeInZone } from '@/app/lib/datetime';
 import { useReceptionSync } from './useReceptionSync';
 import { GuestModal } from './GuestModal';
+import { completeEventAction } from '../events/actions';
 
 type Filter = 'all' | 'present' | 'absent' | 'guest';
 
@@ -41,6 +43,7 @@ export function CheckInClient({
   events,
   initialRows,
   canEdit,
+  canComplete,
   churchId,
   timezone,
   childLabel,
@@ -49,6 +52,7 @@ export function CheckInClient({
   events: ServiceEvent[];
   initialRows: ReceptionRow[];
   canEdit: boolean;
+  canComplete: boolean;
   churchId: string;
   timezone: string;
   childLabel: string;
@@ -64,6 +68,26 @@ export function CheckInClient({
     prev: AttendanceRecord | null;
   } | null>(null);
   const [guestOpen, setGuestOpen] = useState(false);
+
+  // 「開催済みにする」操作。誤操作防止に二段階（確認）。
+  const [confirmComplete, setConfirmComplete] = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
+  const [isCompleting, startCompleting] = useTransition();
+
+  const complete = useCallback(() => {
+    setCompleteError(null);
+    startCompleting(async () => {
+      const res = await completeEventAction(event.id);
+      if (res.error) {
+        setCompleteError(res.error);
+        setConfirmComplete(false);
+        return;
+      }
+      setConfirmComplete(false);
+      // サーバーを再取得：開催済みの礼拝は受付一覧から外れ、別の礼拝か空状態に切り替わる。
+      router.refresh();
+    });
+  }, [event.id, router]);
 
   const summary = useMemo(() => summarizeReception(rows), [rows]);
   const people = useMemo(() => rows.map((r) => r.person), [rows]);
@@ -95,7 +119,9 @@ export function CheckInClient({
   const changeLunch = useCallback(
     (row: ReceptionRow, delta: number) => {
       if (!canEdit || !row.attendance) return;
-      const next = Math.max(0, Math.min(20, row.attendance.lunch_quantity + delta));
+      // 0.5 刻みに丸めてから 0〜20 にクランプ（浮動小数の累積誤差を防ぐ）。
+      const raw = row.attendance.lunch_quantity + delta;
+      const next = Math.max(0, Math.min(20, Math.round(raw * 2) / 2));
       setLastAction({ personId: row.person.id, prev: row.attendance });
       sync.enqueuePut(row.person, next);
     },
@@ -151,6 +177,50 @@ export function CheckInClient({
           <Stat label={childLabel} value={summary.children} />
           <Stat label="昼食" value={summary.lunchTotal} />
         </div>
+
+        {/* 開催済みにする（owner/admin のみ）。開催済みにすると受付一覧から外れ、
+            「礼拝」タブからのみ参照できる。誤操作防止に確認を挟む。 */}
+        {canComplete && (
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            {completeError && (
+              <p className="mb-2 text-xs text-rose-600" role="alert">
+                {completeError}
+              </p>
+            )}
+            {confirmComplete ? (
+              <div className="flex items-center gap-2">
+                <span className="flex-1 text-xs text-slate-500">
+                  この礼拝を開催済みにします。受付一覧から外れ、「礼拝」タブから確認できます。
+                </span>
+                <button
+                  onClick={complete}
+                  disabled={isCompleting}
+                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white active:scale-95 disabled:opacity-50"
+                >
+                  {isCompleting ? '変更中…' : '開催済みにする'}
+                </button>
+                <button
+                  onClick={() => setConfirmComplete(false)}
+                  disabled={isCompleting}
+                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  やめる
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setCompleteError(null);
+                  setConfirmComplete(true);
+                }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                この礼拝を開催済みにする
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 礼拝切り替え（本日複数あるとき） */}
@@ -384,10 +454,10 @@ function PersonRow({
       {present && lunchEnabled && canEdit && (
         <div className="flex items-center gap-1 rounded-lg bg-slate-50 p-0.5">
           <button
-            onClick={() => onLunch(-1)}
+            onClick={() => onLunch(-0.5)}
             className="flex h-8 w-8 items-center justify-center rounded-md text-slate-600 active:bg-slate-200 disabled:opacity-30"
             disabled={attendance!.lunch_quantity <= 0}
-            aria-label="昼食を減らす"
+            aria-label="昼食を0.5減らす"
           >
             <Minus className="h-4 w-4" />
           </button>
@@ -395,9 +465,9 @@ function PersonRow({
             昼{attendance!.lunch_quantity}
           </span>
           <button
-            onClick={() => onLunch(1)}
+            onClick={() => onLunch(0.5)}
             className="flex h-8 w-8 items-center justify-center rounded-md text-slate-600 active:bg-slate-200"
-            aria-label="昼食を増やす"
+            aria-label="昼食を0.5増やす"
           >
             <Plus className="h-4 w-4" />
           </button>

@@ -28,7 +28,8 @@ export const serviceStatusSchema = z.enum([
 // PUT /api/events/:eventId/attendance/:personId
 // 「望む最終状態」を設定する冪等入力。出席させたうえで昼食数を確定する。
 export const putAttendanceSchema = z.object({
-  lunchQuantity: z.number().int().min(0).max(20).default(0),
+  // 昼食は「少なめ」を選べるよう 0.5 刻み（0, 0.5, 1, 1.5, …）。
+  lunchQuantity: z.number().min(0).max(20).multipleOf(0.5).default(0),
 });
 
 // POST /api/events/:eventId/guests
@@ -37,7 +38,7 @@ export const createGuestSchema = z.object({
   furigana: z.string().trim().max(100).optional(),
   ageGroup: ageGroupSchema.default('unknown'),
   relationshipStatus: relationshipStatusSchema.default('guest'),
-  lunchQuantity: z.number().int().min(0).max(20).default(0),
+  lunchQuantity: z.number().min(0).max(20).multipleOf(0.5).default(0),
 });
 
 // POST /api/events （礼拝イベント作成）

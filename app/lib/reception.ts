@@ -30,6 +30,8 @@ export async function getTodayEvents(
 
 // 受付で選べる礼拝。受付中(open)はいつでも、加えて前後の窓（既定±14日）の礼拝も含める。
 // 「今日」だけに縛らないことで、事前に作成した礼拝も受付から到達できる。
+// 開催済み(completed)・キャンセル(cancelled)は受付から外す＝予定(scheduled)と受付中(open)のみ。
+// 開催済みにした礼拝は「礼拝」タブからのみ参照する。
 export async function getReceptionEvents(
   supabase: SupabaseClient,
   churchId: string,
@@ -42,7 +44,7 @@ export async function getReceptionEvents(
     .from('service_events')
     .select('*')
     .eq('church_id', churchId)
-    .neq('status', 'cancelled')
+    .in('status', ['scheduled', 'open'])
     .or(`status.eq.open,and(starts_at.gte.${since},starts_at.lte.${until})`)
     .order('starts_at', { ascending: true });
 

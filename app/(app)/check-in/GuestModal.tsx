@@ -184,7 +184,7 @@ export function GuestModal({
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setLunch((n) => Math.max(0, n - 1))}
+                  onClick={() => setLunch((n) => Math.max(0, Math.round((n - 0.5) * 2) / 2))}
                   className="h-11 w-11 rounded-xl bg-slate-100 text-xl font-bold text-slate-600"
                 >
                   −
@@ -192,7 +192,7 @@ export function GuestModal({
                 <span className="w-10 text-center text-lg font-bold tabular-nums">{lunch}</span>
                 <button
                   type="button"
-                  onClick={() => setLunch((n) => Math.min(20, n + 1))}
+                  onClick={() => setLunch((n) => Math.min(20, Math.round((n + 0.5) * 2) / 2))}
                   className="h-11 w-11 rounded-xl bg-slate-100 text-xl font-bold text-slate-600"
                 >
                   ＋

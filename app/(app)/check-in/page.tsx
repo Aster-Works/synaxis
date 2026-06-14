@@ -20,6 +20,7 @@ export default async function CheckInPage({
   if (!active) return null; // レイアウトで /onboarding へ誘導済み
 
   const canEdit = ['owner', 'admin', 'receptionist'].includes(active.role);
+  const canComplete = ['owner', 'admin'].includes(active.role);
   const supabase = await createSupabaseServerClient();
   const events = await getReceptionEvents(supabase, active.church_id);
 
@@ -62,6 +63,7 @@ export default async function CheckInPage({
       events={events}
       initialRows={rows}
       canEdit={canEdit}
+      canComplete={canComplete}
       churchId={active.church_id}
       timezone={active.church.timezone}
       childLabel={active.church.child_label}

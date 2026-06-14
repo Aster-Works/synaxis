@@ -54,7 +54,6 @@ export function Nav({
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <Clock timezone={timezone} />
           <form action="/auth/signout" method="post">
             <button
               type="submit"
@@ -65,30 +64,35 @@ export function Nav({
               <span className="hidden sm:inline">ログアウト</span>
             </button>
           </form>
+          <Clock timezone={timezone} />
         </div>
       </div>
 
-      <nav className="mx-auto flex w-full max-w-5xl gap-1 overflow-x-auto px-2 pb-1 sm:px-4">
-        {items.map((item) => {
-          const active =
-            pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex min-w-[64px] flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                active
-                  ? 'bg-indigo-50 text-indigo-700'
-                  : 'text-slate-500 hover:bg-slate-100'
-              }`}
-              aria-current={active ? 'page' : undefined}
-            >
-              <Icon className="h-5 w-5" />
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className="mx-auto w-full max-w-5xl overflow-x-auto px-2 pb-1 sm:px-4">
+        {/* 内側を w-max + mx-auto にして、項目が収まるときは中央寄せ、
+            はみ出すときは左端をクリップせずスクロールできるようにする。 */}
+        <div className="mx-auto flex w-max gap-1">
+          {items.map((item) => {
+            const active =
+              pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex min-w-[64px] flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                  active
+                    ? 'bg-indigo-50 text-indigo-700'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
+                aria-current={active ? 'page' : undefined}
+              >
+                <Icon className="h-5 w-5" />
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </header>
   );
