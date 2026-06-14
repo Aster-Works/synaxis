@@ -100,12 +100,38 @@ churches ─┬─ church_memberships ─ auth.users(profiles)
 - 本番 Supabase への破壊的 migration・本番データの削除/統合は、必ず管理者（Jimi）の確認後に行う。
 - ローカルは `npm run db:reset` でいつでも初期化できる（データは消える）。
 
+## Google 連携セットアップ（任意・Phase 3）
+
+出席集計を Google スプレッドシートへ出力する機能。Google Cloud の OAuth
+クライアントが必要で、これが無い間は接続/出力の**実通信は未検証**（コード・
+migration・RLS は完成済み）。手順:
+
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクト作成。
+2. 「API とサービス」で **Google Sheets API** と **Google Drive API** を有効化。
+3. OAuth 同意画面を構成（ユーザータイプ=外部）。テスト段階はテストユーザーに
+   自分の Google アカウントを追加（審査不要で利用可）。スコープに
+   `drive.file` / `spreadsheets` / `userinfo.email` を登録（最小権限）。
+4. 認証情報 → OAuth クライアント ID（ウェブアプリ）を作成。承認済みリダイレクト
+   URI に `http://localhost:3000/api/integrations/google/callback`（＋本番 URL）。
+5. 払い出された ID/シークレットと暗号鍵を `.env.local` に設定:
+   ```
+   GOOGLE_CLIENT_ID=...
+   GOOGLE_CLIENT_SECRET=...
+   GOOGLE_OAUTH_REDIRECT_URI=http://localhost:3000/api/integrations/google/callback
+   GOOGLE_TOKEN_ENC_KEY=$(openssl rand -base64 32)
+   ```
+   `GOOGLE_TOKEN_ENC_KEY` は `SUPABASE_SECRET_KEY` と同じ「サーバ専用・ブラウザに
+   出さない」区分。`refresh_token` は private スキーマに pgcrypto で暗号化保存し、
+   鍵は DB に置かない。接続は owner/admin のみ。「接続を解除」でトークンを revoke
+   ＆ DB から削除する。
+6. `/settings`（owner/admin）の「Google スプレッドシート連携」から接続→出力。
+
 ## ロードマップ進捗
 
 - [x] **Phase 0** ベースライン確立（足場・設定・ローカル DB・テスト基盤・CI）
 - [x] **Phase 1** 安全なマルチテナント基盤（Auth/SSR・RLS・新スキーマ・移行スクリプト）
 - [x] **Phase 2** 日曜運用 MVP（Realtime 複数端末同期・オフライン再試行キュー・重複候補検出・人物統合）
-- [ ] Phase 3 集計・移行・Google Sheets
+- [x] **Phase 3** 集計・移行・Google Sheets（ダッシュボード/期間集計・CSV出力・Excel移行・Google連携※実通信は要設定）
 - [ ] Phase 4 単一教会パイロット
 - [ ] Phase 5 他教会向けベータ
 - [ ] Phase 6 課金

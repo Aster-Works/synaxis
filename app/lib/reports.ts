@@ -20,6 +20,12 @@ export interface ReportFilterInput {
   ratedOnly: boolean;
 }
 
+// 明示範囲（Google Sheets の年度出力などで period の代わりに使う）
+export interface RangeBounds {
+  sinceISO: string;
+  untilISO?: string;
+}
+
 function periodStart(period: Period): Date {
   const d = new Date();
   if (period === '3m') d.setMonth(d.getMonth() - 3);
@@ -33,14 +39,16 @@ export async function getPeriodReport(
   churchId: string,
   timezone: string,
   filter: ReportFilterInput,
+  bounds?: RangeBounds,
 ): Promise<PeriodReport> {
   let q = supabase
     .from('service_events')
     .select('*')
     .eq('church_id', churchId)
     .neq('status', 'cancelled')
-    .gte('starts_at', periodStart(filter.period).toISOString())
+    .gte('starts_at', bounds?.sinceISO ?? periodStart(filter.period).toISOString())
     .order('starts_at', { ascending: false });
+  if (bounds?.untilISO) q = q.lt('starts_at', bounds.untilISO);
   if (filter.kinds.length > 0) q = q.in('kind', filter.kinds);
   if (filter.ratedOnly) q = q.eq('counts_toward_attendance_rate', true);
 
@@ -75,7 +83,15 @@ export async function getPeopleStats(
   churchId: string,
   timezone: string,
   period: Period,
+  bounds?: RangeBounds,
 ): Promise<{ ratedEventCount: number; people: PersonPresence[] }> {
+  let eventsQ = supabase
+    .from('service_events')
+    .select('id, counts_toward_attendance_rate')
+    .eq('church_id', churchId)
+    .neq('status', 'cancelled')
+    .gte('starts_at', bounds?.sinceISO ?? periodStart(period).toISOString());
+  if (bounds?.untilISO) eventsQ = eventsQ.lt('starts_at', bounds.untilISO);
   const [peopleRes, eventsRes] = await Promise.all([
     supabase
       .from('people')
@@ -83,12 +99,7 @@ export async function getPeopleStats(
       .eq('church_id', churchId)
       .is('archived_at', null)
       .order('furigana', { ascending: true, nullsFirst: false }),
-    supabase
-      .from('service_events')
-      .select('id, counts_toward_attendance_rate')
-      .eq('church_id', churchId)
-      .neq('status', 'cancelled')
-      .gte('starts_at', periodStart(period).toISOString()),
+    eventsQ,
   ]);
 
   const people = (peopleRes.data ?? []) as Person[];
@@ -131,14 +142,16 @@ export async function getAttendanceMatrix(
   supabase: SupabaseClient,
   churchId: string,
   filter: ReportFilterInput,
+  bounds?: RangeBounds,
 ): Promise<AttendanceMatrix> {
   let q = supabase
     .from('service_events')
     .select('*')
     .eq('church_id', churchId)
     .neq('status', 'cancelled')
-    .gte('starts_at', periodStart(filter.period).toISOString())
+    .gte('starts_at', bounds?.sinceISO ?? periodStart(filter.period).toISOString())
     .order('starts_at', { ascending: true });
+  if (bounds?.untilISO) q = q.lt('starts_at', bounds.untilISO);
   if (filter.kinds.length > 0) q = q.in('kind', filter.kinds);
   if (filter.ratedOnly) q = q.eq('counts_toward_attendance_rate', true);
 

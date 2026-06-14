@@ -96,6 +96,25 @@ export function zonedWeekStart(iso: string, timeZone: string, weekStartsOn = 0):
   return ws.toISOString().slice(0, 10);
 }
 
+// 指定タイムゾーンの暦年 [year-01-01, (year+1)-01-01) を UTC ISO 範囲で返す。
+// Google Sheets 出力の年度スコープに使う。
+export function yearBoundsUtc(
+  year: number,
+  timeZone: string,
+): { sinceISO: string; untilISO: string } {
+  return {
+    sinceISO: zonedDateTimeToUtcISO(`${year}-01-01T00:00`, timeZone),
+    untilISO: zonedDateTimeToUtcISO(`${year + 1}-01-01T00:00`, timeZone),
+  };
+}
+
+// UTC 時刻を教会ローカルの「年」に変換する。
+export function zonedYearOf(iso: string, timeZone: string): number {
+  return Number(
+    new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric' }).format(new Date(iso)),
+  );
+}
+
 // 礼拝の日付を「M月D日(曜)」で表示する。
 export function formatDateInZone(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat('ja-JP', {

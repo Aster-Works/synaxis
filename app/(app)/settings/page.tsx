@@ -1,12 +1,15 @@
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { getActiveChurch } from '@/app/lib/auth';
 import { createSupabaseServerClient } from '@/app/lib/supabase/server';
 import { ROLE_LABELS, type Role } from '@/app/lib/types';
+import { zonedYearOf } from '@/app/lib/datetime';
+import { GoogleIntegrationCard } from './GoogleIntegrationCard';
 
 interface MemberRow {
   user_id: string;
   role: Role;
-  profile: { display_name: string | null } | null;
+  display_name: string | null;
 }
 
 export default async function SettingsPage() {
@@ -15,11 +18,31 @@ export default async function SettingsPage() {
   if (!['owner', 'admin'].includes(active.role)) redirect('/check-in');
 
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase
+  // church_memberships→profiles は直接 FK が無く PostgREST 埋め込みが効かないため、
+  // メンバーと profiles を別々に取得して JS で結合する（profiles の RLS は
+  // 教会を共有する相手の表示名を許可している）。
+  const { data: mData } = await supabase
     .from('church_memberships')
-    .select('user_id, role, profile:profiles(display_name)')
+    .select('user_id, role')
     .eq('church_id', active.church_id);
-  const members = (data ?? []) as unknown as MemberRow[];
+  const memberRows = (mData ?? []) as { user_id: string; role: Role }[];
+  const userIds = memberRows.map((m) => m.user_id);
+  const { data: profs } = userIds.length
+    ? await supabase.from('profiles').select('id, display_name').in('id', userIds)
+    : { data: [] as { id: string; display_name: string | null }[] };
+  const nameById = new Map((profs ?? []).map((p) => [p.id, p.display_name]));
+  const members: MemberRow[] = memberRows.map((m) => ({
+    user_id: m.user_id,
+    role: m.role,
+    display_name: nameById.get(m.user_id) ?? null,
+  }));
+
+  // Google 連携の状態（メール・接続日時のみ。トークンは取得しない）。
+  const { data: gStatus } = await supabase.rpc('get_google_integration_status', {
+    p_church: active.church_id,
+  });
+  const googleRow = (gStatus ?? [])[0] as { google_account_email: string | null } | undefined;
+  const currentYear = zonedYearOf(new Date().toISOString(), active.church.timezone);
 
   return (
     <div className="space-y-5">
@@ -35,6 +58,14 @@ export default async function SettingsPage() {
         </dl>
       </section>
 
+      <Suspense fallback={null}>
+        <GoogleIntegrationCard
+          connected={!!googleRow}
+          email={googleRow?.google_account_email ?? null}
+          currentYear={currentYear}
+        />
+      </Suspense>
+
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-slate-500">
           メンバー（{members.length}名）
@@ -46,7 +77,7 @@ export default async function SettingsPage() {
               className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm"
             >
               <span className="text-slate-800">
-                {m.profile?.display_name ?? '（表示名未設定）'}
+                {m.display_name ?? '（表示名未設定）'}
               </span>
               <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
                 {ROLE_LABELS[m.role]}
@@ -55,8 +86,7 @@ export default async function SettingsPage() {
           ))}
         </ul>
         <p className="mt-3 text-xs text-slate-400">
-          ユーザー招待・ロール変更・Google 連携・課金は後続 Phase
-          で実装します（owner のみ）。
+          ユーザー招待・ロール変更・課金は後続 Phase で実装します（owner のみ）。
         </p>
       </section>
     </div>
