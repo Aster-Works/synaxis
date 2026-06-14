@@ -1,4 +1,10 @@
-import type { AgeGroup, Person, PersonPresence, RelationshipStatus } from './types';
+import type {
+  AgeGroup,
+  CountMode,
+  Person,
+  PersonPresence,
+  RelationshipStatus,
+} from './types';
 import { zonedDateOf } from './datetime';
 
 // 人物別の出席統計（純関数）。ダッシュボードのテーブルと CSV「ゲスト/人物一覧」が共有する。
@@ -14,19 +20,27 @@ export interface PeopleStatsInput {
     day: string; // 礼拝の教会ローカル日付 YYYY-MM-DD（出席率は「日」単位で数える）
     rated: boolean;
   }[];
-  ratedDayCount: number; // 期間内の rated「日数」（出席率の分母。礼拝数ではない）
+  ratedDayCount: number; // 期間内の rated「日数」（unique の出席率分母）
+  ratedEventCount?: number; // 期間内の rated「礼拝数」（total の出席率分母）
+  // 'unique'（既定）＝日単位（同日に朝夕出ても1日）／'total'＝礼拝単位（延べ）。
+  countMode?: CountMode;
   timezone: string;
 }
 
-// 出席率は「礼拝（朝・夕）」単位ではなく「日」単位で数える。
-// 同じ日に朝礼拝と夕拝の両方へ出ても、朝だけ出た人と同じく「その日に出席＝1日分」。
-// → 1日（朝夕）だけの記録なら、両方出た人も朝だけの人も同じ 100%。
+// 出席回数・出席率の数え方を countMode で切り替える。
+//   'unique'：日単位。同じ日に朝礼拝と夕拝の両方へ出ても「その日に出席＝1日分」。
+//             → 1日（朝夕）だけの記録なら、両方出た人も朝だけの人も同じ 100%。
+//   'total' ：礼拝（サービス）単位の延べ。朝夕出れば 2、分母は rated 礼拝数。
 export function summarizePeoplePresence(input: PeopleStatsInput): PersonPresence[] {
   const { people, attendance, ratedDayCount, timezone } = input;
+  const countMode: CountMode = input.countMode ?? 'unique';
+  const ratedEventCount = input.ratedEventCount ?? 0;
 
   interface Acc {
-    ratedDays: Set<string>; // 出席した rated 日（出席率の分子）
-    allDays: Set<string>; // 出席した全日（出席回数・新来ゲスト判定に使用）
+    services: number; // 出席した礼拝数（延べ）
+    ratedServices: number; // 出席した rated 礼拝数（延べ）
+    ratedDays: Set<string>; // 出席した rated 日
+    allDays: Set<string>; // 出席した全日
     minAt: string | null;
     maxAt: string | null;
   }
@@ -35,19 +49,37 @@ export function summarizePeoplePresence(input: PeopleStatsInput): PersonPresence
   for (const a of attendance) {
     const acc =
       byPerson.get(a.person_id) ??
-      { ratedDays: new Set<string>(), allDays: new Set<string>(), minAt: null, maxAt: null };
+      {
+        services: 0,
+        ratedServices: 0,
+        ratedDays: new Set<string>(),
+        allDays: new Set<string>(),
+        minAt: null,
+        maxAt: null,
+      };
+    acc.services += 1;
     acc.allDays.add(a.day);
-    if (a.rated) acc.ratedDays.add(a.day);
+    if (a.rated) {
+      acc.ratedServices += 1;
+      acc.ratedDays.add(a.day);
+    }
     if (acc.minAt === null || a.checked_in_at < acc.minAt) acc.minAt = a.checked_in_at;
     if (acc.maxAt === null || a.checked_in_at > acc.maxAt) acc.maxAt = a.checked_in_at;
     byPerson.set(a.person_id, acc);
   }
 
+  const unique = countMode === 'unique';
+  const denom = unique ? ratedDayCount : ratedEventCount;
+
   const out: PersonPresence[] = people.map((p) => {
     const acc = byPerson.get(p.id);
     const daysAttended = acc?.allDays.size ?? 0;
-    const count = daysAttended; // 出席回数は「出席した日数」（同日に朝夕出ても1日は1）
+    const servicesAttended = acc?.services ?? 0;
     const ratedDaysAttended = acc?.ratedDays.size ?? 0;
+    const ratedServicesAttended = acc?.ratedServices ?? 0;
+    // unique は「日」、total は「礼拝（延べ）」で数える。
+    const count = unique ? daysAttended : servicesAttended;
+    const ratedCount = unique ? ratedDaysAttended : ratedServicesAttended;
     const firstOn = p.first_visit_on
       ? p.first_visit_on
       : acc?.minAt
@@ -61,16 +93,12 @@ export function summarizePeoplePresence(input: PeopleStatsInput): PersonPresence
       relationship: p.relationship_status as RelationshipStatus,
       ageGroup: p.age_group as AgeGroup,
       count,
-      ratedCount: ratedDaysAttended, // 出席率の分子＝出席した rated 日数
-      // 出席率＝出席した rated 日数 / 期間内 rated 日数（朝夕どちらに出ても1日は1）
-      rate:
-        ratedDayCount > 0
-          ? Math.round((ratedDaysAttended / ratedDayCount) * 1000) / 1000
-          : 0,
+      ratedCount,
+      rate: denom > 0 ? Math.round((ratedCount / denom) * 1000) / 1000 : 0,
       firstOn,
       lastOn,
-      // 新来ゲスト＝guest かつ「出席した日」が1日だけ（同日に朝夕2回でも1日）
-      isNewGuest: p.relationship_status === 'guest' && daysAttended === 1,
+      // 新来ゲスト＝guest かつ出席が1回のみ（unique は1日、total は1礼拝）
+      isNewGuest: p.relationship_status === 'guest' && count === 1,
     };
   });
 

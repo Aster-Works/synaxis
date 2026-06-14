@@ -134,6 +134,28 @@ describe('summarizePeriod', () => {
     expect(r.eventReports.find((x) => x.event.id === 'e')!.present).toBe(1);
   });
 
+  it("countMode='total' は延べで数える（夕拝も重複除外しない）", () => {
+    const events = [
+      ev('m', 'morning_worship', '2026-06-14T01:30:00Z', true),
+      ev('e', 'evening_worship', '2026-06-14T09:00:00Z', false),
+    ];
+    const attendance = [
+      att('m', 'adult', 'member', 0, 'A'),
+      att('m', 'adult', 'member', 0, 'B'),
+      att('e', 'adult', 'member', 0, 'B'), // 朝にも出たが、延べでは夕にも数える
+      att('e', 'child', 'seeker', 0, 'C'),
+    ];
+    const r = summarizePeriod({ events, attendance, timezone: TZ, countMode: 'total' });
+    expect(r.totals.byKind.morning_worship.present).toBe(2);
+    expect(r.totals.byKind.evening_worship.present).toBe(2); // B も含む
+    expect(r.totals.present).toBe(4); // 延べ4
+    expect(r.dayReports[0].present).toBe(4);
+    expect(r.dayReports[0].services.map((s) => [s.name, s.present])).toEqual([
+      ['m', 2],
+      ['e', 2],
+    ]);
+  });
+
   it('週推移は教会ローカル週起点でまとめる（同一週の朝礼拝と夕拝が合算）', () => {
     // 2026-06-14 は日曜。朝(JST 10:30)と夕(JST 18:00)は同じ週(週初め 6/14)。
     const events = [

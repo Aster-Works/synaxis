@@ -134,12 +134,21 @@ export const PERIOD_LABELS: Record<Period, string> = {
   all: '全期間',
 };
 
+// 出席の数え方。'unique'＝1日1人1回（同じ日の複数礼拝は重複させない）／'total'＝延べ。
+export type CountMode = 'unique' | 'total';
+
+export const COUNT_MODE_LABELS: Record<CountMode, string> = {
+  unique: 'ユニーク',
+  total: '延べ',
+};
+
 // ── 期間集計（Phase 3。aggregate.ts / people-stats.ts が生成）──────────────
 
 export interface ReportFilter {
   period: Period;
   kinds: ServiceKind[] | 'all';
   ratedOnly: boolean;
+  countMode: CountMode;
 }
 
 export interface PeriodEventReport {

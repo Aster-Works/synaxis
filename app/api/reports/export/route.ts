@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     period: sp.get('period'),
     kinds: sp.get('kinds'),
     ratedOnly: sp.get('ratedOnly'),
+    count: sp.get('count'),
   });
   const tz = active.church.timezone;
 

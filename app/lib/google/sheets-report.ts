@@ -29,7 +29,13 @@ export async function buildSheetValues(
   year: number,
 ): Promise<SheetValues> {
   const bounds = yearBoundsUtc(year, timezone);
-  const filter = { period: 'all' as const, kinds: [], ratedOnly: false };
+  // 年度出力は既定の「ユニーク（1日1人1回）」で集計する。
+  const filter = {
+    period: 'all' as const,
+    kinds: [],
+    ratedOnly: false,
+    countMode: 'unique' as const,
+  };
 
   const report = await getPeriodReport(supabase, churchId, timezone, filter, bounds);
   const { people } = await getPeopleStats(supabase, churchId, timezone, filter, bounds);

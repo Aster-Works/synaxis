@@ -13,6 +13,7 @@ export function PeriodFilter() {
 
   const period = (params.get('period') as Period) ?? '3m';
   const ratedOnly = params.get('ratedOnly') === '1';
+  const countMode = params.get('count') === 'total' ? 'total' : 'unique';
   const selectedKinds = new Set(
     (params.get('kinds') ?? '').split(',').filter(Boolean) as ServiceKind[],
   );
@@ -82,6 +83,36 @@ export function PeriodFilter() {
         />
         出席率対象の礼拝のみ（特別礼拝などを除外）
       </label>
+
+      {/* 集計方法の切り替え：1日1人1回（ユニーク）/ 延べ */}
+      <div className="flex items-center gap-2 border-t border-slate-100 pt-2">
+        <span className="text-[11px] text-slate-500">集計方法</span>
+        <div className="flex gap-1 rounded-lg bg-slate-100 p-0.5">
+          {(
+            [
+              ['unique', '1日1人1回'],
+              ['total', '延べ'],
+            ] as const
+          ).map(([m, label]) => (
+            <button
+              key={m}
+              onClick={() =>
+                update((p) =>
+                  m === 'total' ? p.set('count', 'total') : p.delete('count'),
+                )
+              }
+              aria-pressed={countMode === m}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                countMode === m
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

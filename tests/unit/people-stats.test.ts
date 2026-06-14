@@ -58,6 +58,29 @@ describe('summarizePeoplePresence', () => {
     expect(y.rate).toBe(1); // 朝だけの人も同じく100%
   });
 
+  it("countMode='total' は礼拝（延べ）単位で出席率を出す（朝だけは50%に戻る）", () => {
+    const people = [person('x', 'member'), person('y', 'member')];
+    const attendance = [
+      { person_id: 'x', checked_in_at: '2026-06-14T01:30:00Z', day: '2026-06-14', rated: true }, // 朝
+      { person_id: 'x', checked_in_at: '2026-06-14T09:00:00Z', day: '2026-06-14', rated: true }, // 夕
+      { person_id: 'y', checked_in_at: '2026-06-14T01:30:00Z', day: '2026-06-14', rated: true }, // 朝のみ
+    ];
+    const r = summarizePeoplePresence({
+      people,
+      attendance,
+      ratedDayCount: 1,
+      ratedEventCount: 2,
+      countMode: 'total',
+      timezone: TZ,
+    });
+    const x = r.find((p) => p.personId === 'x')!;
+    const y = r.find((p) => p.personId === 'y')!;
+    expect(x.count).toBe(2); // 延べ2礼拝
+    expect(x.rate).toBe(1); // 2/2 礼拝
+    expect(y.count).toBe(1);
+    expect(y.rate).toBe(0.5); // 1/2 礼拝（延べでは朝だけは50%）
+  });
+
   it('rated 日が0でも rate=0 で例外を出さない', () => {
     const people = [person('a', 'member')];
     const r = summarizePeoplePresence({

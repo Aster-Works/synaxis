@@ -15,7 +15,12 @@ import { TrendChart } from './TrendChart';
 import { PeoplePresenceTable } from './PeoplePresenceTable';
 import { ExportButtons } from './ExportButtons';
 
-type SearchParams = Promise<{ period?: string; kinds?: string; ratedOnly?: string }>;
+type SearchParams = Promise<{
+  period?: string;
+  kinds?: string;
+  ratedOnly?: string;
+  count?: string;
+}>;
 
 const REL_ORDER: RelationshipStatus[] = ['member', 'regular_attendee', 'seeker', 'guest'];
 
@@ -43,6 +48,7 @@ export default async function DashboardPage({
   const report = await getPeriodReport(supabase, active.church_id, tz, filter);
   const { people } = await getPeopleStats(supabase, active.church_id, tz, filter);
   const t = report.totals;
+  const unique = report.filter.countMode === 'unique'; // 集計方法（1日1人1回 / 延べ）
 
   return (
     <div className="space-y-5">
@@ -114,10 +120,10 @@ export default async function DashboardPage({
         <TrendChart points={report.trend} />
       </section>
 
-      {/* 日別（その日のユニーク出席。同じ日に複数礼拝へ出た人は1回だけ・最初の礼拝に計上） */}
+      {/* 日別（その日の出席。unique=同じ日に複数礼拝へ出た人は1回だけ・最初の礼拝に計上） */}
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-slate-500">
-          日別（ユニーク出席）
+          日別（{unique ? 'ユニーク出席' : '延べ出席'}）
         </h2>
         {report.dayReports.length === 0 ? (
           <p className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
@@ -136,21 +142,21 @@ export default async function DashboardPage({
                   </p>
                   <p className="text-sm">
                     <span className="text-[11px] text-slate-500">
-                      ユニーク出席{' '}
+                      {unique ? 'ユニーク出席' : '延べ出席'}{' '}
                     </span>
                     <span className="font-bold tabular-nums text-indigo-700">
                       {d.present}
                     </span>
                   </p>
                 </div>
-                {/* 礼拝内訳：先頭=その日最初の礼拝、以降は「+N＝新規（前の礼拝に出ていない人）」 */}
+                {/* 礼拝内訳：unique は先頭=最初の礼拝・以降は「+N＝新規」。total は各礼拝の実数 */}
                 <p className="mt-1 text-xs text-slate-600">
                   {d.services.map((s, i) => (
                     <span key={s.eventId}>
                       {i > 0 && <span className="text-slate-300"> ・ </span>}
                       {s.name}{' '}
                       <span className="font-semibold tabular-nums text-slate-800">
-                        {i === 0 ? '' : '+'}
+                        {unique && i > 0 ? '+' : ''}
                         {s.present}
                       </span>
                     </span>

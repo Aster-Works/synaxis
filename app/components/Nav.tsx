@@ -23,9 +23,9 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/check-in', label: '受付', icon: CalendarCheck, roles: ['owner', 'admin', 'receptionist'] },
-  { href: '/dashboard', label: '集計', icon: BarChart3, roles: ['owner', 'admin', 'receptionist', 'viewer'] },
   { href: '/people', label: '人物', icon: Users, roles: ['owner', 'admin', 'receptionist', 'viewer'] },
   { href: '/events', label: '礼拝', icon: CalendarDays, roles: ['owner', 'admin', 'receptionist', 'viewer'] },
+  { href: '/dashboard', label: '集計', icon: BarChart3, roles: ['owner', 'admin', 'receptionist', 'viewer'] },
   { href: '/settings', label: '設定', icon: Settings, roles: ['owner', 'admin'] },
 ];
 
@@ -53,18 +53,18 @@ export function Nav({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex flex-col items-end gap-1">
+          <Clock timezone={timezone} />
           <form action="/auth/signout" method="post">
             <button
               type="submit"
-              className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-100"
+              className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
               aria-label="ログアウト"
             >
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">ログアウト</span>
             </button>
           </form>
-          <Clock timezone={timezone} />
         </div>
       </div>
 

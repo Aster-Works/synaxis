@@ -4,6 +4,7 @@ import { summarizePeriod, type PeriodAttendanceRow } from './aggregate';
 import { summarizePeoplePresence } from './people-stats';
 import { zonedDateOf } from './datetime';
 import type {
+  CountMode,
   Period,
   PeriodReport,
   Person,
@@ -19,6 +20,7 @@ export interface ReportFilterInput {
   period: Period;
   kinds: ServiceKind[]; // 空配列 = 全種別
   ratedOnly: boolean;
+  countMode: CountMode; // 'unique'＝1日1人1回 / 'total'＝延べ
 }
 
 // 明示範囲（Google Sheets の年度出力などで period の代わりに使う）
@@ -68,13 +70,19 @@ export async function getPeriodReport(
     attendance = (data ?? []) as any;
   }
 
-  const report = summarizePeriod({ events, attendance, timezone });
+  const report = summarizePeriod({
+    events,
+    attendance,
+    timezone,
+    countMode: filter.countMode,
+  });
   return {
     ...report,
     filter: {
       period: filter.period,
       kinds: filter.kinds.length ? filter.kinds : 'all',
       ratedOnly: filter.ratedOnly,
+      countMode: filter.countMode,
     },
   };
 }
@@ -147,8 +155,14 @@ export async function getPeopleStats(
     );
   }
 
-  const stats = summarizePeoplePresence({ people, attendance, ratedDayCount, timezone });
-  // ratedEventCount は API 互換のため返す（出席率の分母は内部で日数 ratedDayCount を使用）。
+  const stats = summarizePeoplePresence({
+    people,
+    attendance,
+    ratedDayCount,
+    ratedEventCount,
+    countMode: filter.countMode,
+    timezone,
+  });
   return { ratedEventCount, people: stats };
 }
 
@@ -217,6 +231,7 @@ export function parseReportFilter(params: {
   period?: string | null;
   kinds?: string | null;
   ratedOnly?: string | null;
+  count?: string | null;
 }): ReportFilterInput {
   const period = (['3m', '6m', 'all'] as const).includes(params.period as Period)
     ? (params.period as Period)
@@ -225,5 +240,7 @@ export function parseReportFilter(params: {
     .split(',')
     .map((s) => s.trim())
     .filter((s): s is ServiceKind => VALID_KINDS.includes(s as ServiceKind));
-  return { period, kinds, ratedOnly: params.ratedOnly === '1' };
+  // 既定は 'unique'（1日1人1回）。'total' のときだけ延べ。
+  const countMode: CountMode = params.count === 'total' ? 'total' : 'unique';
+  return { period, kinds, ratedOnly: params.ratedOnly === '1', countMode };
 }
