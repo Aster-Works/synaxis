@@ -7,7 +7,13 @@ export const UTF8_BOM = '﻿';
 
 function escapeCell(value: CsvCell): string {
   if (value === null || value === undefined) return '';
-  const s = String(value);
+  // 数値は注入リスクなし。そのまま出す（先頭の - を無害化しない）。
+  if (typeof value === 'number') return String(value);
+  let s = String(value);
+  // CSV/フォーミュラインジェクション対策: Excel/LibreOffice が数式として
+  // 評価し得る先頭文字（= + - @ TAB CR）を持つ文字列はシングルクォートで無害化。
+  // 自由入力（人物名・礼拝名等）が受付権限で仕込まれてもセルが式にならない。
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   if (/[",\r\n]/.test(s)) {
     return `"${s.replace(/"/g, '""')}"`;
   }

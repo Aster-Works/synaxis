@@ -24,6 +24,16 @@ describe('toCsv', () => {
   it('null/undefined は空文字', () => {
     expect(toCsvBody([[null, undefined, 0]])).toBe(',,0');
   });
+
+  it('フォーミュラインジェクション対策: = + - @ 始まりの文字列を無害化', () => {
+    // 先頭にシングルクォートを付けて数式評価を防ぐ
+    expect(toCsvBody([['=HYPERLINK("x")']])).toBe(`"'=HYPERLINK(""x"")"`);
+    expect(toCsvBody([['+1', '-2', '@cmd']])).toBe(`'+1,'-2,'@cmd`);
+    // 数値は無害化しない（負数もそのまま）
+    expect(toCsvBody([[-5, 0]])).toBe('-5,0');
+    // 通常の名前・日付は影響なし
+    expect(toCsvBody([['山田 太郎', '2026-06-14']])).toBe('山田 太郎,2026-06-14');
+  });
 });
 
 function ev(id: string, rated: boolean): ServiceEvent {
