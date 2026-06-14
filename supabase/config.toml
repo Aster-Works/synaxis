@@ -340,6 +340,22 @@ skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
 
+# Google ログイン。
+# 本番(ホスト型)は Supabase ダッシュボード → Authentication → Providers → Google で設定する
+# （config.toml は本番の Auth 設定には反映されない）。ここはローカル開発用。
+# ローカルで試す場合: enabled=true にし、環境変数 SUPABASE_AUTH_GOOGLE_CLIENT_ID /
+# SUPABASE_AUTH_GOOGLE_SECRET を設定して `supabase start`。Google Cloud の OAuth クライアントに
+# リダイレクトURI http://127.0.0.1:54521/auth/v1/callback を登録すること。
+[auth.external.google]
+enabled = false
+client_id = "env(SUPABASE_AUTH_GOOGLE_CLIENT_ID)"
+# DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
+secret = "env(SUPABASE_AUTH_GOOGLE_SECRET)"
+redirect_uri = ""
+url = ""
+# ローカルで Google サインインを通すには nonce チェックの無効化が必要。
+skip_nonce_check = true
+
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.
 [auth.web3.solana]

@@ -21,19 +21,39 @@ Jimi が行う残りの手順をまとめる。クラウド構築の大部分は
 - Vercel に公開 env（`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`）
   を production/preview/development で設定済み。
 
-## ⚠️ 最初に必要な手順: Supabase Auth のリダイレクト URL 設定
+## ⚠️ ログイン方式（メール＋パスワード／Google）— 本番ダッシュボード設定が必須
 
-**これを行うまで本番でログインできない**（マジックリンクのリダイレクトが拒否される）。
+アプリのログインは **メール＋パスワード（主）＋ Google** に変更済み（マジックリンクは廃止。
+ワンタイムリンクがメールの先読みで失効する不具合が多発したため）。アプリ側のコードは対応済みだが、
+**以下の Supabase ダッシュボード設定を行うまで本番では動作しない**（Google は無効・既存ユーザーは
+パスワード未設定のためログイン不可）。
 
-Supabase ダッシュボード → 対象プロジェクト Synaxis → **Authentication → URL Configuration**:
-
+### 1. Authentication → URL Configuration
 - **Site URL**: `https://synaxis-ten.vercel.app`
-- **Redirect URLs**（追加）:
-  - `https://synaxis-ten.vercel.app/**`
-  - （独自ドメインを後で割り当てたらそれも追加）
+- **Redirect URLs**（追加）: `https://synaxis-ten.vercel.app/**`
+  （独自ドメインを後で割り当てたらそれも追加）
 
-保存後、本番でメールログインが通るようになる（メールは Supabase の組み込み SMTP か、
-本番運用なら独自 SMTP を Authentication → Emails で設定推奨。無料枠の送信制限に注意）。
+### 2. Authentication → Providers → Email
+- **Confirm email** を **OFF**（確認メールなしで即ログインする運用）。
+  ※ ON のままだと新規登録時に確認メールが必要になり、メール先読み/失効の問題が再発しうる。
+
+### 3. Authentication → Providers → Google を有効化
+1. **Google Cloud Console** → APIとサービス → 認証情報 → OAuth クライアント ID（種類: ウェブ）を作成。
+   - 承認済みリダイレクト URI: `https://korslvkwqpyiagwyjroi.supabase.co/auth/v1/callback`
+   - （Sheets 連携用に作成済みのクライアントへ、この URI を追記して流用しても可）
+2. 取得した **クライアント ID** と **クライアントシークレット** を、Supabase の Google プロバイダ画面に
+   貼り付けて有効化・保存。
+3. OAuth 同意画面で、必要なら本番ユーザーのメールをテストユーザーに追加（公開ステータスに応じて）。
+
+### 4. 既存ユーザー（マジックリンクで作った owner）のログイン手段
+既存アカウントはパスワード未設定なので、次のいずれかで復帰する:
+- **同じメールの Google でログイン**（同一メールなら既存ユーザーに識別子が結びつく）。教会の owner 権限を保つには
+  **以前と同じ Google アカウント**でログインすること。または
+- Supabase ダッシュボード → Authentication → Users → 該当ユーザーで **パスワードを設定/リカバリ送信**。
+
+> ローカル開発: `supabase/config.toml` の `[auth.email] enable_confirmations=false` で確認メール不要。
+> Google をローカルで試す場合は `[auth.external.google]` を `enabled=true` にし、env でクライアント
+> ID/シークレットを与える（本番のホスト型は config.toml ではなくダッシュボードが設定の正）。
 
 ## 実データ（現行 Excel）の本番移行
 
