@@ -17,13 +17,19 @@ export default async function PeoplePage() {
     .order('furigana', { ascending: true, nullsFirst: false });
   const people = (data ?? []) as Person[];
   const canMerge = ['owner', 'admin'].includes(active.role);
+  const canEdit = ['owner', 'admin'].includes(active.role);
   const canAdd = ['owner', 'admin', 'receptionist'].includes(active.role);
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-slate-900">人物</h1>
       {canAdd && <AddPersonForm childLabel={active.church.child_label} />}
-      <PeopleList people={people} canMerge={canMerge} />
+      <PeopleList
+        people={people}
+        canMerge={canMerge}
+        canEdit={canEdit}
+        childLabel={active.church.child_label}
+      />
     </div>
   );
 }

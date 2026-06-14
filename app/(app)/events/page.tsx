@@ -7,6 +7,7 @@ import {
 } from '@/app/lib/types';
 import { formatDateInZone, formatTimeInZone } from '@/app/lib/datetime';
 import { EventForm } from './EventForm';
+import { EventRowEdit } from './EventRowEdit';
 
 export default async function EventsPage() {
   const active = await getActiveChurch();
@@ -44,9 +45,14 @@ export default async function EventsPage() {
                 {e.counts_toward_attendance_rate && ' · 出席率対象'}
               </p>
             </div>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-              {SERVICE_STATUS_LABELS[e.status]}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                {SERVICE_STATUS_LABELS[e.status]}
+              </span>
+              {canManage && (
+                <EventRowEdit event={e} timezone={active.church.timezone} />
+              )}
+            </div>
           </li>
         ))}
         {events.length === 0 && (

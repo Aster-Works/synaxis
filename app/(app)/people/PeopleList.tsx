@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Combine } from 'lucide-react';
+import { Search, Combine, Pencil } from 'lucide-react';
 import {
   AGE_GROUP_LABELS,
   RELATIONSHIP_BADGE,
@@ -10,17 +10,23 @@ import {
   type Person,
 } from '@/app/lib/types';
 import { MergeModal } from './MergeModal';
+import { PersonEditModal } from './PersonEditModal';
 
 export function PeopleList({
   people,
   canMerge = false,
+  canEdit = false,
+  childLabel = '子ども',
 }: {
   people: Person[];
   canMerge?: boolean;
+  canEdit?: boolean;
+  childLabel?: string;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [mergeSource, setMergeSource] = useState<Person | null>(null);
+  const [editPerson, setEditPerson] = useState<Person | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -71,6 +77,16 @@ export function PeopleList({
               >
                 {RELATIONSHIP_LABELS[p.relationship_status]}
               </span>
+              {canEdit && (
+                <button
+                  onClick={() => setEditPerson(p)}
+                  className="flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  aria-label={`${p.display_name} を編集`}
+                  title="この人物を編集・削除"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
               {canMerge && (
                 <button
                   onClick={() => setMergeSource(p)}
@@ -100,6 +116,14 @@ export function PeopleList({
             setMergeSource(null);
             router.refresh();
           }}
+        />
+      )}
+
+      {editPerson && (
+        <PersonEditModal
+          person={editPerson}
+          childLabel={childLabel}
+          onClose={() => setEditPerson(null)}
         />
       )}
     </div>
