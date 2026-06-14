@@ -24,6 +24,7 @@ import {
   SERVICE_KIND_LABELS,
 } from '@/app/lib/types';
 import { summarizeReception } from '@/app/lib/aggregate';
+import { kanaRowOf, KANA_ROWS } from '@/app/lib/kana';
 import { formatDateInZone, formatTimeInZone } from '@/app/lib/datetime';
 import { useReceptionSync } from './useReceptionSync';
 import { GuestModal } from './GuestModal';
@@ -63,6 +64,7 @@ export function CheckInClient({
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const [kanaRow, setKanaRow] = useState<string | null>(null); // 五十音「行」フィルター（null=全て）
   const [lastAction, setLastAction] = useState<{
     personId: string;
     prev: AttendanceRecord | null;
@@ -98,13 +100,14 @@ export function CheckInClient({
       if (filter === 'present' && !attendance) return false;
       if (filter === 'absent' && attendance) return false;
       if (filter === 'guest' && person.relationship_status !== 'guest') return false;
+      if (kanaRow && kanaRowOf(person.furigana) !== kanaRow) return false;
       if (!q) return true;
       return (
         person.display_name.toLowerCase().includes(q) ||
         (person.furigana ?? '').toLowerCase().includes(q)
       );
     });
-  }, [rows, query, filter]);
+  }, [rows, query, filter, kanaRow]);
 
   const toggle = useCallback(
     (row: ReceptionRow) => {
@@ -267,6 +270,35 @@ export function CheckInClient({
             }`}
           >
             {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* あかさたな（五十音「行」）フィルター。ふりがなの先頭で絞り込む */}
+      <div className="flex flex-wrap gap-1">
+        <button
+          onClick={() => setKanaRow(null)}
+          aria-pressed={kanaRow === null}
+          className={`min-w-[34px] rounded-md py-1 text-xs font-medium ${
+            kanaRow === null
+              ? 'bg-indigo-600 text-white'
+              : 'bg-white text-slate-600 ring-1 ring-slate-200'
+          }`}
+        >
+          全
+        </button>
+        {KANA_ROWS.map((r) => (
+          <button
+            key={r}
+            onClick={() => setKanaRow((cur) => (cur === r ? null : r))}
+            aria-pressed={kanaRow === r}
+            className={`min-w-[34px] flex-1 rounded-md py-1 text-xs font-medium ${
+              kanaRow === r
+                ? 'bg-indigo-600 text-white'
+                : 'bg-white text-slate-600 ring-1 ring-slate-200'
+            }`}
+          >
+            {r}
           </button>
         ))}
       </div>
