@@ -41,3 +41,7 @@ next-env.d.ts
 # supabase local
 /supabase/.branches
 /supabase/.temp
+
+# 移行スクリプトの中間生成物（個人情報＝氏名を含むためコミットしない）
+/scripts/_artifacts/
+*.xlsx
