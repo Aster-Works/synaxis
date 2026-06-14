@@ -132,7 +132,10 @@ migration・RLS は完成済み）。手順:
 - [x] **Phase 1** 安全なマルチテナント基盤（Auth/SSR・RLS・新スキーマ・移行スクリプト）
 - [x] **Phase 2** 日曜運用 MVP（Realtime 複数端末同期・オフライン再試行キュー・重複候補検出・人物統合）
 - [x] **Phase 3** 集計・移行・Google Sheets（ダッシュボード/期間集計・CSV出力・Excel移行・Google連携※実通信は要設定）
-- [ ] Phase 4 単一教会パイロット
+- [~] **Phase 4** 単一教会パイロット — 本番デプロイ済み（Supabase東京＋Vercel: https://synaxis-ten.vercel.app）。
+  実データ移行と4週間の実地運用検証は [`docs/DEPLOY.md`](docs/DEPLOY.md) 参照
+- [ ] Phase 5 他教会向けベータ
+- [ ] Phase 6 課金
 - [ ] Phase 5 他教会向けベータ
 - [ ] Phase 6 課金
 
