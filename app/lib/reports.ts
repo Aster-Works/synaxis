@@ -82,7 +82,7 @@ export async function getPeopleStats(
   supabase: SupabaseClient,
   churchId: string,
   timezone: string,
-  period: Period,
+  filter: ReportFilterInput,
   bounds?: RangeBounds,
 ): Promise<{ ratedEventCount: number; people: PersonPresence[] }> {
   let eventsQ = supabase
@@ -90,8 +90,11 @@ export async function getPeopleStats(
     .select('id, counts_toward_attendance_rate')
     .eq('church_id', churchId)
     .neq('status', 'cancelled')
-    .gte('starts_at', bounds?.sinceISO ?? periodStart(period).toISOString());
+    .gte('starts_at', bounds?.sinceISO ?? periodStart(filter.period).toISOString());
   if (bounds?.untilISO) eventsQ = eventsQ.lt('starts_at', bounds.untilISO);
+  // まとめ集計(getPeriodReport)と母集団を一致させるため種別・出席率対象でも絞る。
+  if (filter.kinds.length > 0) eventsQ = eventsQ.in('kind', filter.kinds);
+  if (filter.ratedOnly) eventsQ = eventsQ.eq('counts_toward_attendance_rate', true);
   const [peopleRes, eventsRes] = await Promise.all([
     supabase
       .from('people')

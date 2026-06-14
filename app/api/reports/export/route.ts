@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     const m = await getAttendanceMatrix(supabase, active.church_id, filter);
     rows = buildMatrixRows(m.events, m.people, m.present, tz);
   } else {
-    const { people } = await getPeopleStats(supabase, active.church_id, tz, filter.period);
+    const { people } = await getPeopleStats(supabase, active.church_id, tz, filter);
     rows = type === 'guests' ? buildGuestsRows(people) : buildPeopleRows(people);
   }
 

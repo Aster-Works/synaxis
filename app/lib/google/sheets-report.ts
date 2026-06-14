@@ -32,7 +32,7 @@ export async function buildSheetValues(
   const filter = { period: 'all' as const, kinds: [], ratedOnly: false };
 
   const report = await getPeriodReport(supabase, churchId, timezone, filter, bounds);
-  const { people } = await getPeopleStats(supabase, churchId, timezone, 'all', bounds);
+  const { people } = await getPeopleStats(supabase, churchId, timezone, filter, bounds);
   const matrix = await getAttendanceMatrix(supabase, churchId, filter, bounds);
 
   return {

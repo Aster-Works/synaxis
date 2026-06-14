@@ -136,18 +136,18 @@ async function main() {
     dateToEvent.set(zoned(e.starts_at), e.id);
   }
 
-  // 2) 特別礼拝イベント（出席率対象外）
-  const specialRows = data.special.map((e) => ({
-    church_id: TARGET, kind: 'special_worship', name: e.eventName,
-    starts_at: zonedDateTimeToUtcISO(`${e.date}T10:00`, TZ), status: 'completed',
-    counts_toward_attendance_rate: false, lunch_enabled: false,
-  }));
-  const specEventByDate = new Map<string, string>();
-  if (specialRows.length) {
-    const { data: se, error: seErr } = await target
-      .from('service_events').insert(specialRows).select('id, starts_at');
+  // 2) 特別礼拝イベント（出席率対象外）。
+  //    日付キーで引くと、同一日付に解決した2列が後勝ちで衝突し出席が誤帰属するため、
+  //    1件ずつ作成して data.special の index で event id を保持する。
+  const specialEventIds: string[] = [];
+  for (const e of data.special) {
+    const { data: se, error: seErr } = await target.from('service_events').insert({
+      church_id: TARGET, kind: 'special_worship', name: e.eventName,
+      starts_at: zonedDateTimeToUtcISO(`${e.date}T10:00`, TZ), status: 'completed',
+      counts_toward_attendance_rate: false, lunch_enabled: false,
+    }).select('id').single();
     if (seErr || !se) { console.error('特別礼拝の作成に失敗:', seErr?.message); process.exit(1); }
-    for (const e of se) specEventByDate.set(zoned(e.starts_at), e.id);
+    specialEventIds.push(se.id);
   }
 
   // 3) roster 人物（1行=1人。同名でも別人として作る＝自動統合しない）。
@@ -183,8 +183,9 @@ async function main() {
   // 5) 特別礼拝出席（roster と名寄せ・無ければ新規作成）
   let specialUnmatched = 0;
   const specialAtt: typeof attRows = [];
-  for (const e of data.special) {
-    const eid = specEventByDate.get(e.date);
+  for (let i = 0; i < data.special.length; i++) {
+    const e = data.special[i];
+    const eid = specialEventIds[i];
     if (!eid) continue;
     for (const a of e.attendees) {
       let pid = nameToId.get(normalizeName(a.name));
@@ -218,7 +219,7 @@ async function main() {
   console.log(`people:     roster ${allRoster.length} + 特別新規 ${specialUnmatched} = ${allRoster.length + specialUnmatched} → 新 ${newPeople}`);
   console.log(`attendance: 生データ ${rawTotal}（週次 ${totalMarks} + 特別 ${totalSpecial}）`);
   console.log(`            重複除外後 ${inserted}（除外 ${rawTotal - inserted}）→ 新 ${newAtt}`);
-  console.log(`週次礼拝 ${weeklyEvents.length} / 特別礼拝 ${specialRows.length}`);
+  console.log(`週次礼拝 ${weeklyEvents.length} / 特別礼拝 ${specialEventIds.length}`);
   if (newAtt !== inserted || newPeople !== allRoster.length + specialUnmatched) {
     console.error('✗ 件数が一致しません。確認してください。');
     process.exit(1);

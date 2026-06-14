@@ -41,7 +41,7 @@ export default async function DashboardPage({
   );
 
   const report = await getPeriodReport(supabase, active.church_id, tz, filter);
-  const { people } = await getPeopleStats(supabase, active.church_id, tz, filter.period);
+  const { people } = await getPeopleStats(supabase, active.church_id, tz, filter);
   const t = report.totals;
 
   return (
