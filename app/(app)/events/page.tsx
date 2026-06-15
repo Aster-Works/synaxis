@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { ListChecks } from 'lucide-react';
 import { getActiveChurch } from '@/app/lib/auth';
 import { createSupabaseServerClient } from '@/app/lib/supabase/server';
 import {
@@ -96,7 +98,18 @@ export default async function EventsPage() {
                   {SERVICE_STATUS_LABELS[e.status]}
                 </span>
                 {canManage && (
-                  <EventRowEdit event={e} timezone={active.church.timezone} />
+                  <>
+                    {/* この礼拝の出席を編集（開催済みでも修正モードで受付UIを開く） */}
+                    <Link
+                      href={`/check-in?event=${e.id}`}
+                      aria-label="出席を編集"
+                      title="出席を編集"
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    >
+                      <ListChecks className="h-4 w-4" />
+                    </Link>
+                    <EventRowEdit event={e} timezone={active.church.timezone} />
+                  </>
                 )}
               </div>
             </li>

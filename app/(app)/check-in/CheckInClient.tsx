@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Check,
   Plus,
@@ -45,6 +46,7 @@ export function CheckInClient({
   initialRows,
   canEdit,
   canComplete,
+  correctionMode = false,
   churchId,
   timezone,
   childLabel,
@@ -54,6 +56,7 @@ export function CheckInClient({
   initialRows: ReceptionRow[];
   canEdit: boolean;
   canComplete: boolean;
+  correctionMode?: boolean; // 開催済み等の礼拝の出席を後から修正するモード
   churchId: string;
   timezone: string;
   childLabel: string;
@@ -145,6 +148,21 @@ export function CheckInClient({
       {/* イベント情報・検索・フィルターまでを固定し、人物一覧だけスクロールさせる。
           Nav(高さ108px・sticky)の直下に貼り付ける。 */}
       <div className="sticky top-[108px] z-20 -mx-3 space-y-3 bg-slate-100 px-3 pb-2 sm:-mx-5 sm:px-5">
+      {/* 修正モード：開催済み等の礼拝の出席を後から直していることを明示 */}
+      {correctionMode && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span>
+            <span className="font-semibold">出席の修正中</span>
+            ：開催済みの礼拝です。通常の受付一覧には表示されません。
+          </span>
+          <Link
+            href="/events"
+            className="shrink-0 rounded-lg bg-white px-2.5 py-1 font-medium text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100"
+          >
+            礼拝へ戻る
+          </Link>
+        </div>
+      )}
       {/* 礼拝情報＋リアルタイム合計＋同期状態 */}
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex items-start justify-between gap-2">
@@ -182,8 +200,9 @@ export function CheckInClient({
         </div>
 
         {/* 開催済みにする（owner/admin のみ）。開催済みにすると受付一覧から外れ、
-            「礼拝」タブからのみ参照できる。誤操作防止に確認を挟む。 */}
-        {canComplete && (
+            「礼拝」タブからのみ参照できる。誤操作防止に確認を挟む。
+            修正モード（既に開催済み）では出さない。 */}
+        {canComplete && !correctionMode && (
           <div className="mt-3 border-t border-slate-100 pt-3">
             {completeError && (
               <p className="mb-2 text-xs text-rose-600" role="alert">

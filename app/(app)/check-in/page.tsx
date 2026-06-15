@@ -5,7 +5,9 @@ import {
   getReceptionEvents,
   pickCurrentEvent,
   getReceptionRows,
+  getEventById,
 } from '@/app/lib/reception';
+import type { ServiceEvent } from '@/app/lib/types';
 import { CheckInClient } from './CheckInClient';
 
 type SearchParams = Promise<{ event?: string }>;
@@ -24,9 +26,21 @@ export default async function CheckInPage({
   const supabase = await createSupabaseServerClient();
   const events = await getReceptionEvents(supabase, active.church_id);
 
-  const selected =
-    (eventParam && events.find((e) => e.id === eventParam)) ||
-    pickCurrentEvent(events);
+  // 通常は受付一覧（予定・受付中）から選ぶ。明示指定された礼拝が一覧に無い場合は、
+  // 開催済み等の「出席を編集（修正モード）」として読み込む（owner/admin のみ）。
+  let selected: ServiceEvent | null =
+    (eventParam && events.find((e) => e.id === eventParam)) || null;
+  let correctionMode = false;
+  let switcherEvents = events;
+  if (!selected && eventParam && canComplete) {
+    const ev = await getEventById(supabase, eventParam);
+    if (ev) {
+      selected = ev;
+      correctionMode = true;
+      switcherEvents = [ev]; // 修正モードでは礼拝切替を出さない
+    }
+  }
+  if (!selected) selected = pickCurrentEvent(events);
 
   if (!selected) {
     return (
@@ -60,10 +74,11 @@ export default async function CheckInPage({
     <CheckInClient
       key={selected.id}
       event={selected}
-      events={events}
+      events={switcherEvents}
       initialRows={rows}
       canEdit={canEdit}
       canComplete={canComplete}
+      correctionMode={correctionMode}
       churchId={active.church_id}
       timezone={active.church.timezone}
       childLabel={active.church.child_label}
