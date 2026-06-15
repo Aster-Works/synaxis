@@ -72,7 +72,7 @@ export function buildSummaryRows(report: PeriodReport, timezone: string): CsvCel
 // 人物一覧: 全人物の属性 + 出席統計
 export function buildPeopleRows(people: PersonPresence[]): CsvCell[][] {
   const header: CsvCell[] = [
-    '氏名', 'フリガナ', '立場', '年齢区分', '出席回数', '出席率(%)', '初回出席', '最終出席',
+    '氏名', 'ふりがな', '立場', '年齢区分', '出席回数', '出席率(%)', '初回出席', '最終出席',
   ];
   const rows: CsvCell[][] = [header];
   for (const p of people) {
@@ -92,7 +92,7 @@ export function buildPeopleRows(people: PersonPresence[]): CsvCell[][] {
 
 // ゲスト: 現在の立場が guest の人物のみ
 export function buildGuestsRows(people: PersonPresence[]): CsvCell[][] {
-  const header: CsvCell[] = ['氏名', 'フリガナ', '初回出席', '最終出席', '出席回数', '現在の立場'];
+  const header: CsvCell[] = ['氏名', 'ふりがな', '初回出席', '最終出席', '出席回数', '現在の立場'];
   const rows: CsvCell[][] = [header];
   for (const p of people.filter((x) => x.relationship === 'guest')) {
     rows.push([
@@ -116,7 +116,7 @@ export function buildMatrixRows(
 ): CsvCell[][] {
   const header: CsvCell[] = [
     '氏名',
-    'フリガナ',
+    'ふりがな',
     ...events.map((e) => `${zonedDateOf(e.starts_at, timezone)} ${e.name}`),
   ];
   const rows: CsvCell[][] = [header];

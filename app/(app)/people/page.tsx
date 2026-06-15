@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/app/lib/supabase/server';
 import type { Person } from '@/app/lib/types';
 import { PeopleList } from './PeopleList';
 import { AddPersonForm } from './AddPersonForm';
+import { ImportPeople } from './ImportPeople';
 
 export default async function PeoplePage() {
   const active = await getActiveChurch();
@@ -19,11 +20,13 @@ export default async function PeoplePage() {
   const canMerge = ['owner', 'admin'].includes(active.role);
   const canEdit = ['owner', 'admin'].includes(active.role);
   const canAdd = ['owner', 'admin', 'receptionist'].includes(active.role);
+  const canImport = ['owner', 'admin'].includes(active.role);
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-slate-900">名簿</h1>
       {canAdd && <AddPersonForm childLabel={active.church.child_label} />}
+      {canImport && <ImportPeople />}
       <PeopleList
         people={people}
         canMerge={canMerge}
