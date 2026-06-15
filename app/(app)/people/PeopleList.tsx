@@ -7,13 +7,16 @@ import {
   AGE_GROUP_LABELS,
   RELATIONSHIP_BADGE,
   RELATIONSHIP_LABELS,
-  RELATIONSHIP_ORDER,
   type Person,
   type RelationshipStatus,
 } from '@/app/lib/types';
 import { kanaRowOf, KANA_ROWS } from '@/app/lib/kana';
 import { MergeModal } from './MergeModal';
 import { PersonEditModal } from './PersonEditModal';
+
+// 名簿の区分フィルター。立場（会員/客員/未信/ビジター）に加え、年齢区分の「子ども」を
+// 同じ行で単一選択する。'child' は age_group==='child' で絞り込む。
+type PeopleFilter = RelationshipStatus | 'child';
 
 export function PeopleList({
   people,
@@ -28,15 +31,28 @@ export function PeopleList({
 }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [rel, setRel] = useState<RelationshipStatus | null>(null); // 立場フィルター（null=全て）
+  const [filter, setFilter] = useState<PeopleFilter | null>(null); // 区分フィルター（null=全て）
   const [kanaRow, setKanaRow] = useState<string | null>(null); // 五十音「行」フィルター（null=全て）
   const [mergeSource, setMergeSource] = useState<Person | null>(null);
   const [editPerson, setEditPerson] = useState<Person | null>(null);
 
+  // ボタンの並び：会員／客員／未信／子ども／ビジター（子どもはビジターの左）。
+  const filterOptions: { key: PeopleFilter; label: string }[] = [
+    { key: 'member', label: RELATIONSHIP_LABELS.member },
+    { key: 'regular_attendee', label: RELATIONSHIP_LABELS.regular_attendee },
+    { key: 'seeker', label: RELATIONSHIP_LABELS.seeker },
+    { key: 'child', label: childLabel },
+    { key: 'guest', label: RELATIONSHIP_LABELS.guest },
+  ];
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return people.filter((p) => {
-      if (rel && p.relationship_status !== rel) return false;
+      if (filter === 'child') {
+        if (p.age_group !== 'child') return false;
+      } else if (filter && p.relationship_status !== filter) {
+        return false;
+      }
       if (kanaRow && kanaRowOf(p.furigana) !== kanaRow) return false;
       if (
         q &&
@@ -46,7 +62,7 @@ export function PeopleList({
         return false;
       return true;
     });
-  }, [people, query, rel, kanaRow]);
+  }, [people, query, filter, kanaRow]);
 
   return (
     <div className="space-y-3">
@@ -60,31 +76,31 @@ export function PeopleList({
         />
       </div>
 
-      {/* 立場フィルター（全／会員・客員・未信・ビジター） */}
+      {/* 区分フィルター（全／会員・客員・未信・子ども・ビジター） */}
       <div className="flex gap-1.5">
         <button
-          onClick={() => setRel(null)}
-          aria-pressed={rel === null}
+          onClick={() => setFilter(null)}
+          aria-pressed={filter === null}
           className={`flex-1 rounded-lg py-1.5 text-xs font-medium ${
-            rel === null
+            filter === null
               ? 'bg-slate-900 text-white'
               : 'bg-white text-slate-600 ring-1 ring-slate-200'
           }`}
         >
           全
         </button>
-        {RELATIONSHIP_ORDER.map((r) => (
+        {filterOptions.map((f) => (
           <button
-            key={r}
-            onClick={() => setRel((cur) => (cur === r ? null : r))}
-            aria-pressed={rel === r}
+            key={f.key}
+            onClick={() => setFilter((cur) => (cur === f.key ? null : f.key))}
+            aria-pressed={filter === f.key}
             className={`flex-1 rounded-lg py-1.5 text-xs font-medium ${
-              rel === r
+              filter === f.key
                 ? 'bg-slate-900 text-white'
                 : 'bg-white text-slate-600 ring-1 ring-slate-200'
             }`}
           >
-            {RELATIONSHIP_LABELS[r]}
+            {f.label}
           </button>
         ))}
       </div>
