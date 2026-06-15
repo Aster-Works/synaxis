@@ -2,7 +2,34 @@
 
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { Poppins } from 'next/font/google';
 import { createSupabaseBrowserClient } from '@/app/lib/supabase/client';
+
+// ロゴのワードマーク用の幾何学サンセリフ。
+const brand = Poppins({ subsets: ['latin'], weight: ['500', '600', '700'] });
+
+const NAVY = '#0F2A4A';
+
+// 十字架＋会衆（8つのドット）の円形エンブレム（ファビコンと共通デザイン）。
+function SynaxisMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 512 512" className={className} aria-hidden="true">
+      <circle cx="256" cy="256" r="223" fill="none" stroke={NAVY} strokeWidth="19" />
+      <g fill={NAVY}>
+        <rect x="239.5" y="144.5" width="33" height="232.5" />
+        <rect x="175.5" y="203.5" width="161" height="33" />
+        <circle cx="256" cy="92" r="19" />
+        <circle cx="372" cy="140" r="19" />
+        <circle cx="420" cy="256" r="19" />
+        <circle cx="372" cy="372" r="19" />
+        <circle cx="256" cy="420" r="19" />
+        <circle cx="140" cy="372" r="19" />
+        <circle cx="92" cy="256" r="19" />
+        <circle cx="140" cy="140" r="19" />
+      </g>
+    </svg>
+  );
+}
 
 type Mode = 'signin' | 'signup';
 
@@ -106,10 +133,24 @@ function LoginForm() {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-5 py-10">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-          Synaxis
-        </h1>
-        <p className="mt-2 text-sm text-slate-500">礼拝出席・昼食管理</p>
+        <div className="inline-flex items-center gap-3">
+          <SynaxisMark className="h-14 w-14 shrink-0" />
+          <div className="text-left">
+            <div
+              className={`${brand.className} text-[2.4rem] font-bold leading-none tracking-tight`}
+              style={{ color: NAVY }}
+            >
+              Synaxis
+            </div>
+            <div
+              className={`${brand.className} mt-1.5 text-[9px] font-medium uppercase leading-none tracking-[0.2em]`}
+              style={{ color: NAVY, opacity: 0.7 }}
+            >
+              Worship Attendance Manager
+            </div>
+          </div>
+        </div>
+        <p className="mt-4 text-sm text-slate-500">礼拝出席・昼食管理</p>
       </div>
 
       {/* ログイン / 新規登録 切り替え */}
