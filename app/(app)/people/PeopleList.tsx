@@ -7,8 +7,11 @@ import {
   AGE_GROUP_LABELS,
   RELATIONSHIP_BADGE,
   RELATIONSHIP_LABELS,
+  RELATIONSHIP_ORDER,
   type Person,
+  type RelationshipStatus,
 } from '@/app/lib/types';
+import { kanaRowOf, KANA_ROWS } from '@/app/lib/kana';
 import { MergeModal } from './MergeModal';
 import { PersonEditModal } from './PersonEditModal';
 
@@ -25,18 +28,25 @@ export function PeopleList({
 }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const [rel, setRel] = useState<RelationshipStatus | null>(null); // 立場フィルター（null=全て）
+  const [kanaRow, setKanaRow] = useState<string | null>(null); // 五十音「行」フィルター（null=全て）
   const [mergeSource, setMergeSource] = useState<Person | null>(null);
   const [editPerson, setEditPerson] = useState<Person | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return people;
-    return people.filter(
-      (p) =>
-        p.display_name.toLowerCase().includes(q) ||
-        (p.furigana ?? '').toLowerCase().includes(q),
-    );
-  }, [people, query]);
+    return people.filter((p) => {
+      if (rel && p.relationship_status !== rel) return false;
+      if (kanaRow && kanaRowOf(p.furigana) !== kanaRow) return false;
+      if (
+        q &&
+        !p.display_name.toLowerCase().includes(q) &&
+        !(p.furigana ?? '').toLowerCase().includes(q)
+      )
+        return false;
+      return true;
+    });
+  }, [people, query, rel, kanaRow]);
 
   return (
     <div className="space-y-3">
@@ -48,6 +58,64 @@ export function PeopleList({
           placeholder="名前・ふりがなで検索"
           className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
         />
+      </div>
+
+      {/* 立場フィルター（全／会員・客員・未信・ビジター） */}
+      <div className="flex gap-1.5">
+        <button
+          onClick={() => setRel(null)}
+          aria-pressed={rel === null}
+          className={`flex-1 rounded-lg py-1.5 text-xs font-medium ${
+            rel === null
+              ? 'bg-slate-900 text-white'
+              : 'bg-white text-slate-600 ring-1 ring-slate-200'
+          }`}
+        >
+          全
+        </button>
+        {RELATIONSHIP_ORDER.map((r) => (
+          <button
+            key={r}
+            onClick={() => setRel((cur) => (cur === r ? null : r))}
+            aria-pressed={rel === r}
+            className={`flex-1 rounded-lg py-1.5 text-xs font-medium ${
+              rel === r
+                ? 'bg-slate-900 text-white'
+                : 'bg-white text-slate-600 ring-1 ring-slate-200'
+            }`}
+          >
+            {RELATIONSHIP_LABELS[r]}
+          </button>
+        ))}
+      </div>
+
+      {/* あかさたな（五十音「行」）フィルター。ふりがなの先頭で絞り込む */}
+      <div className="flex flex-wrap gap-1">
+        <button
+          onClick={() => setKanaRow(null)}
+          aria-pressed={kanaRow === null}
+          className={`min-w-[34px] rounded-md py-1 text-xs font-medium ${
+            kanaRow === null
+              ? 'bg-indigo-600 text-white'
+              : 'bg-white text-slate-600 ring-1 ring-slate-200'
+          }`}
+        >
+          全
+        </button>
+        {KANA_ROWS.map((r) => (
+          <button
+            key={r}
+            onClick={() => setKanaRow((cur) => (cur === r ? null : r))}
+            aria-pressed={kanaRow === r}
+            className={`min-w-[34px] flex-1 rounded-md py-1 text-xs font-medium ${
+              kanaRow === r
+                ? 'bg-indigo-600 text-white'
+                : 'bg-white text-slate-600 ring-1 ring-slate-200'
+            }`}
+          >
+            {r}
+          </button>
+        ))}
       </div>
 
       <p className="text-xs text-slate-400">{filtered.length}名</p>
