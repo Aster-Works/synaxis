@@ -10,6 +10,63 @@ import type { PeriodTotals } from '../types';
 
 export class GoogleAuthExpiredError extends Error {}
 
+// Google API 呼び出しの失敗を、診断情報（HTTPステータス・reason・message）付きで
+// 上位（API ルート）へ伝える。reason 例: SERVICE_DISABLED（API 未有効化）、
+// ACCESS_TOKEN_SCOPE_INSUFFICIENT（スコープ不足）。トークン等の機微情報は含めない。
+export interface GoogleErrorInfo {
+  httpStatus?: number;
+  reason?: string;
+  message?: string;
+}
+export class GoogleExportError extends Error {
+  detail: GoogleErrorInfo;
+  constructor(detail: GoogleErrorInfo) {
+    super(detail.message ?? 'Google 出力に失敗しました');
+    this.detail = detail;
+  }
+}
+
+// gaxios / googleapis のエラーから診断情報を取り出す。
+// - OAuth トークンエンドポイント形式: response.data.error は文字列（invalid_grant 等）
+// - Google API(v4) 形式: response.data.error はオブジェクト { code,message,status,errors[],details[] }
+function parseGoogleError(e: unknown): GoogleErrorInfo {
+  const err = e as {
+    code?: number | string;
+    status?: number;
+    message?: string;
+    response?: {
+      status?: number;
+      data?: { error?: unknown; error_description?: string };
+    };
+  };
+  const httpStatus =
+    err?.response?.status ??
+    (typeof err?.code === 'number' ? err.code : undefined) ??
+    err?.status;
+  const dataErr = err?.response?.data?.error;
+  if (typeof dataErr === 'string') {
+    return {
+      httpStatus,
+      reason: dataErr,
+      message: err.response?.data?.error_description ?? dataErr,
+    };
+  }
+  if (dataErr && typeof dataErr === 'object') {
+    const o = dataErr as {
+      message?: string;
+      status?: string;
+      errors?: { reason?: string }[];
+      details?: { reason?: string }[];
+    };
+    const reason =
+      o.errors?.find((x) => x.reason)?.reason ??
+      o.details?.find((x) => x.reason)?.reason ??
+      o.status;
+    return { httpStatus, reason, message: o.message };
+  }
+  return { httpStatus, message: err?.message };
+}
+
 function encKey(): string {
   const k = process.env.GOOGLE_TOKEN_ENC_KEY;
   if (!k) throw new Error('GOOGLE_TOKEN_ENC_KEY が未設定です');
@@ -41,20 +98,20 @@ export async function runSheetsExport(
   timezone: string,
   year: number,
 ): Promise<ExportResult> {
-  const auth = await authedClientFor(supabase, churchId);
-  if (!auth) return { connected: false };
-
-  const values = await buildSheetValues(supabase, churchId, timezone, year);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sheets = google.sheets({ version: 'v4', auth: auth as any });
-
-  const { data: existingId } = await supabase.rpc('get_google_spreadsheet_id', {
-    p_church: churchId,
-    p_year: year,
-  });
-  let sid = existingId as string | null;
-
   try {
+    const auth = await authedClientFor(supabase, churchId);
+    if (!auth) return { connected: false };
+
+    const values = await buildSheetValues(supabase, churchId, timezone, year);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sheets = google.sheets({ version: 'v4', auth: auth as any });
+
+    const { data: existingId } = await supabase.rpc('get_google_spreadsheet_id', {
+      p_church: churchId,
+      p_year: year,
+    });
+    let sid = existingId as string | null;
+
     if (!sid) {
       const created = await sheets.spreadsheets.create({
         requestBody: {
@@ -100,18 +157,20 @@ export async function runSheetsExport(
         requestBody: { values: tab.rows as (string | number | null)[][] },
       });
     }
-  } catch (e: unknown) {
-    // refresh_token 失効（接続解除/取消）→ 再接続誘導
-    const err = e as { response?: { data?: { error?: string } } };
-    if (err?.response?.data?.error === 'invalid_grant') throw new GoogleAuthExpiredError();
-    throw e;
-  }
 
-  return {
-    connected: true,
-    spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${sid}/edit`,
-    totals: values.totals,
-  };
+    return {
+      connected: true,
+      spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${sid}/edit`,
+      totals: values.totals,
+    };
+  } catch (e: unknown) {
+    const info = parseGoogleError(e);
+    // 真因をサーバログに残す（本番デバッグ用。トークン等の機微情報は含めない）。
+    console.error('[google-sheets] 出力失敗', { churchId, year, ...info });
+    // refresh_token 失効（接続解除/取消）→ 再接続誘導
+    if (info.reason === 'invalid_grant') throw new GoogleAuthExpiredError();
+    throw new GoogleExportError(info);
+  }
 }
 
 // 接続解除時のベストエフォート revoke（失敗は無視）。

@@ -3,6 +3,23 @@
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+// API が返す Google 側の診断情報を、Jimi 向けの原因・対処メッセージに変換する。
+function hintForDetail(detail?: {
+  httpStatus?: number;
+  reason?: string;
+  message?: string;
+}): string {
+  const reason = detail?.reason ?? '';
+  if (reason === 'SERVICE_DISABLED')
+    return 'Google Cloud で Google Sheets API / Drive API が有効になっていません。両方を有効化してください。';
+  if (reason === 'ACCESS_TOKEN_SCOPE_INSUFFICIENT')
+    return '連携の権限（スコープ）が不足しています。「接続を解除」してから、もう一度接続し直してください。';
+  if (reason === 'PERMISSION_DENIED')
+    return '権限エラーです（API 未有効化、またはスコープ不足の可能性）。Google Cloud の設定をご確認ください。';
+  if (detail?.message) return `エラー詳細: ${detail.message}`;
+  return '時間をおいてお試しください。';
+}
+
 export function GoogleIntegrationCard({
   connected,
   email,
@@ -19,12 +36,14 @@ export function GoogleIntegrationCard({
     'idle',
   );
   const [url, setUrl] = useState('');
+  const [errorHint, setErrorHint] = useState('');
 
   const years = [currentYear, currentYear - 1, currentYear - 2];
 
   async function runExport() {
     setStatus('running');
     setUrl('');
+    setErrorHint('');
     const res = await fetch('/api/exports/google-sheets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -37,6 +56,8 @@ export function GoogleIntegrationCard({
     } else if (res.status === 409) {
       setStatus('reconnect');
     } else {
+      const data = await res.json().catch(() => ({}));
+      setErrorHint(hintForDetail(data?.detail));
       setStatus('error');
     }
   }
@@ -123,7 +144,9 @@ export function GoogleIntegrationCard({
             </p>
           )}
           {status === 'error' && (
-            <p className="text-sm text-rose-700">出力に失敗しました。時間をおいてお試しください。</p>
+            <p className="text-sm text-rose-700">
+              出力に失敗しました。{errorHint || '時間をおいてお試しください。'}
+            </p>
           )}
         </div>
       )}

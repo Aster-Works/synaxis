@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { apiError, getApiContext } from '@/app/lib/api';
 import { getActiveChurch } from '@/app/lib/auth';
-import { runSheetsExport, GoogleAuthExpiredError } from '@/app/lib/google/server';
+import { runSheetsExport, GoogleAuthExpiredError, GoogleExportError } from '@/app/lib/google/server';
 
 export const runtime = 'nodejs';
 
@@ -35,6 +35,15 @@ export async function POST(request: NextRequest) {
     if (e instanceof GoogleAuthExpiredError) {
       return NextResponse.json({ error: 'reconnect' }, { status: 409 });
     }
+    // owner/admin 限定のエンドポイントなので、診断用に Google 側の reason を返す
+    // （トークン等の機微情報は含まない）。
+    if (e instanceof GoogleExportError) {
+      return NextResponse.json(
+        { error: '出力に失敗しました', detail: e.detail },
+        { status: 500 },
+      );
+    }
+    console.error('[google-sheets] 想定外エラー', e);
     return apiError('出力に失敗しました', 500);
   }
 }
