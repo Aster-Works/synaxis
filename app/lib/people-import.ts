@@ -104,12 +104,15 @@ export function parsePeopleCsv(
   text: string,
   existingNames: Set<string>,
 ): ImportParseResult {
-  const all = parseCsv(text).filter((r) => r.some((c) => c.trim() !== ''));
+  // 空行は除外しつつ、エラー表示用に元の行番号（1始まり）を保持する。
+  const all = parseCsv(text)
+    .map((cells, idx) => ({ cells, rowNo: idx + 1 }))
+    .filter(({ cells }) => cells.some((c) => c.trim() !== ''));
   if (all.length < 2) {
     return { rows: [], skippedExisting: 0, errors: [], headerError: 'データ行がありません（ヘッダ＋1行以上が必要です）' };
   }
 
-  const header = all[0].map((h) => unescapeCell(h).trim());
+  const header = all[0].cells.map((h) => unescapeCell(h).trim());
   const col = (...names: string[]) => header.findIndex((h) => names.includes(h));
   const iName = col('氏名', '名前');
   if (iName < 0) {
@@ -126,7 +129,7 @@ export function parsePeopleCsv(
   let skippedExisting = 0;
 
   for (let r = 1; r < all.length; r++) {
-    const cells = all[r].map(unescapeCell);
+    const cells = all[r].cells.map(unescapeCell);
     const name = (cells[iName] ?? '').trim();
     if (!name) continue; // 空行はスキップ
     const key = normName(name);
@@ -145,7 +148,7 @@ export function parsePeopleCsv(
     });
     if (!parsed.success) {
       if (errors.length < 20) {
-        errors.push(`${r + 1}行目「${name}」: ${parsed.error.issues[0]?.message ?? '入力エラー'}`);
+        errors.push(`${all[r].rowNo}行目「${name}」: ${parsed.error.issues[0]?.message ?? '入力エラー'}`);
       }
       continue;
     }

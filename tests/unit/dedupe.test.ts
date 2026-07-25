@@ -100,3 +100,21 @@ describe('matchDuplicateCandidates', () => {
     expect(matchDuplicateCandidates({ displayName: '' }, people)).toEqual([]);
   });
 });
+
+describe('matchDuplicateCandidates（部分一致の長さガード）', () => {
+  it('1文字の既存人物（例:「林」）は部分一致(0.9)の候補にしない', () => {
+    const people = [p('x', '林', 'はやし')];
+    const got = matchDuplicateCandidates(
+      { displayName: '小林 太郎', furigana: 'こばやし たろう' },
+      people,
+    );
+    expect(got.find((c) => c.reason === 'partial')).toBeUndefined();
+  });
+
+  it('双方2文字以上なら入力途中でも部分一致で拾う', () => {
+    const people = [p('y', '小林 太郎', 'こばやし たろう')];
+    const got = matchDuplicateCandidates({ displayName: '小林' }, people);
+    expect(got[0]?.reason).toBe('partial');
+    expect(got[0]?.score).toBe(0.9);
+  });
+});

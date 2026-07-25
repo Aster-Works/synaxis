@@ -74,3 +74,22 @@ describe('parsePeopleCsv', () => {
     });
   });
 });
+
+describe('parsePeopleCsv（エラーの行番号）', () => {
+  const header = '氏名,ふりがな,立場,年齢区分,出席回数,出席率(%),初回出席,最終出席';
+
+  it('空行を挟んでも元ファイルの行番号で報告する', () => {
+    const longName = 'あ'.repeat(101); // max(100) 超で zod エラー
+    const csv = [
+      header, // 1行目
+      '', // 2行目（空行）
+      '山田 太郎,やまだ,会員,大人,,,,', // 3行目（正常）
+      '', // 4行目（空行）
+      `${longName},ながい,会員,大人,,,,`, // 5行目（エラー）
+    ].join('\n');
+    const r = parsePeopleCsv(csv, new Set());
+    expect(r.rows).toHaveLength(1);
+    expect(r.errors).toHaveLength(1);
+    expect(r.errors[0]).toMatch(/^5行目/);
+  });
+});

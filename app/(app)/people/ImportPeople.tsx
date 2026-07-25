@@ -22,8 +22,18 @@ export function ImportPeople() {
     }
     setFileName(f.name);
     const reader = new FileReader();
-    reader.onload = () => setText(String(reader.result ?? ''));
-    reader.readAsText(f); // UTF-8（エクスポートCSVと同じ）
+    reader.onload = () => {
+      // UTF-8 を厳格に試し、失敗したら Shift_JIS として読む
+      // （日本語版 Excel の「CSV (カンマ区切り)」保存は Shift_JIS。
+      //  UTF-8 固定だと文字化けした氏名がそのまま登録されてしまう）。
+      const buf = reader.result as ArrayBuffer;
+      try {
+        setText(new TextDecoder('utf-8', { fatal: true }).decode(buf));
+      } catch {
+        setText(new TextDecoder('shift_jis').decode(buf));
+      }
+    };
+    reader.readAsArrayBuffer(f);
   };
 
   const submit = () => {
@@ -58,7 +68,7 @@ export function ImportPeople() {
       </div>
 
       <p className="text-xs text-slate-500">
-        「集計」→ CSV出力の「人物一覧」をそのまま取り込めます（UTF-8）。
+        「集計」→ CSV出力の「人物一覧」をそのまま取り込めます（UTF-8 / Shift_JIS 自動判定）。
         氏名・ふりがな・立場・年齢区分を読み込み、<b>既存と同名の人はスキップ</b>します。
       </p>
 

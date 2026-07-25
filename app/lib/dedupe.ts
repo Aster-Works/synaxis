@@ -105,8 +105,10 @@ export function matchDuplicateCandidates(
           reason = 'exact';
           break;
         }
-        // 入力途中でも拾えるよう、2文字以上の包含を部分一致として加点
-        if (a.length >= 2 && (b.includes(a) || a.includes(b))) {
+        // 入力途中でも拾えるよう、2文字以上の包含を部分一致として加点。
+        // 双方2文字以上を要求する（片側だけだと「林」が「小林 太郎」の
+        // 高スコア候補になる等、短い別人を誤って出席させる誘導になる）。
+        if (a.length >= 2 && b.length >= 2 && (b.includes(a) || a.includes(b))) {
           if (0.9 > best) {
             best = 0.9;
             reason = 'partial';

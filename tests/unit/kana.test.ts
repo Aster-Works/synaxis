@@ -44,3 +44,11 @@ describe('kanaRowOf（五十音「行」判定）', () => {
     expect(KANA_ROWS).toEqual(['あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ', '他']);
   });
 });
+
+describe('kanaRowOf（ヴ・旧仮名）', () => {
+  it('ヴ は あ行、ゐ・ゑ は わ行', () => {
+    expect(kanaRowOf('ヴぁいおりん')).toBe('あ'); // ヴ→ゔ
+    expect(kanaRowOf('ゐのうえ')).toBe('わ');
+    expect(kanaRowOf('ゑびす')).toBe('わ');
+  });
+});
