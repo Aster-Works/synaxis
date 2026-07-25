@@ -4,6 +4,7 @@ import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Poppins } from 'next/font/google';
 import { createSupabaseBrowserClient } from '@/app/lib/supabase/client';
+import { safeInternalPath } from '@/app/lib/safe-path';
 
 // ロゴのワードマーク用の幾何学サンセリフ。
 const brand = Poppins({ subsets: ['latin'], weight: ['500', '600', '700'] });
@@ -53,7 +54,8 @@ function jaError(message: string): string {
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const redirect = searchParams.get('redirect') ?? '/check-in';
+  // redirect はアプリ内パスのみ許可（"//evil.com" 等へのオープンリダイレクト対策）。
+  const redirect = safeInternalPath(searchParams.get('redirect'), '/check-in');
   const authError = searchParams.get('error'); // /auth/callback 失敗時
 
   const [mode, setMode] = useState<Mode>('signin');

@@ -95,7 +95,9 @@ export function useReceptionSync(
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [flushing, setFlushing] = useState(false);
 
-  const store = useRef(createQueueStore());
+  // useRef(createQueueStore()) は引数が毎レンダー評価され localStorage プローブが
+  // 走るため、useState の遅延初期化（初回のみ実行）で1度だけ生成する。
+  const [store] = useState(() => createQueueStore());
   const snapRef = useRef(snap);
   const serverRowsRef = useRef(serverRows);
   const inFlight = useRef<Set<string>>(new Set());
@@ -108,14 +110,17 @@ export function useReceptionSync(
   }, [serverRows]);
 
   // snap 更新（ref 同期 + 永続化）
-  const setSnap = useCallback((updater: (s: QueueSnapshot) => QueueSnapshot) => {
-    setSnapState((prev) => {
-      const next = updater(prev);
-      snapRef.current = next;
-      store.current.save(next);
-      return next;
-    });
-  }, []);
+  const setSnap = useCallback(
+    (updater: (s: QueueSnapshot) => QueueSnapshot) => {
+      setSnapState((prev) => {
+        const next = updater(prev);
+        snapRef.current = next;
+        store.save(next);
+        return next;
+      });
+    },
+    [store],
+  );
 
   const rows = useMemo(() => mergeRows(serverRows, snap), [serverRows, snap]);
   const pendingCount = countPending(snap);
@@ -127,6 +132,14 @@ export function useReceptionSync(
       if (res.ok) {
         const { rows: fresh } = await res.json();
         setServerRows(fresh as ReceptionRow[]);
+      } else if (res.status === 401) {
+        // セッション失効。古い表示のまま黙って動き続けず、ログインへ戻す
+        // （再ログイン後、未送信キューは localStorage から復元されて再送される）。
+        window.location.assign(
+          `/login?redirect=${encodeURIComponent(
+            window.location.pathname + window.location.search,
+          )}`,
+        );
       }
     } catch {
       /* オフライン等。ポーリング/再購読で再試行される */
@@ -317,7 +330,7 @@ export function useReceptionSync(
 
   // ── 起動時: 永続キューを復元（現スナップが空のときだけ）→ 送信試行 ──
   useEffect(() => {
-    const persisted = store.current.load(eventId);
+    const persisted = store.load(eventId);
     if (persisted && !isEmptySnapshot(persisted) && isEmptySnapshot(snapRef.current)) {
       setSnap(() => persisted);
       scheduleFlush(0);

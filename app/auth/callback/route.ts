@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createSupabaseServerClient } from '@/app/lib/supabase/server';
+import { safeInternalPath } from '@/app/lib/safe-path';
 
 // Magic Link / OTP のコールバック。
 // PKCE の `code` を受け取りセッションへ交換する（cookie はサーバークライアントが設定）。
@@ -9,7 +10,8 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const tokenHash = searchParams.get('token_hash');
   const type = searchParams.get('type');
-  const redirectTo = searchParams.get('redirect') ?? '/check-in';
+  // redirect はアプリ内パスのみ許可（オープンリダイレクト対策）。
+  const redirectTo = safeInternalPath(searchParams.get('redirect'), '/check-in');
 
   const supabase = await createSupabaseServerClient();
 

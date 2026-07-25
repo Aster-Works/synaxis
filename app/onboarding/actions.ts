@@ -47,6 +47,8 @@ export async function createChurchAction(
     path: '/',
     maxAge: 60 * 60 * 24 * 365,
     sameSite: 'lax',
+    httpOnly: true, // サーバでしか読まない（auth.ts）
+    secure: process.env.NODE_ENV === 'production',
   });
 
   redirect('/check-in');
