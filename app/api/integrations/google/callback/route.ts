@@ -32,6 +32,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/settings?google=error`);
   }
 
+  // 暗号鍵の未設定を保存前に検知する（空のままだと保存は成功するのに
+  // 読み出しが常に失敗する「接続済みなのに毎回エラー」状態になる）。
+  if (!process.env.GOOGLE_TOKEN_ENC_KEY) {
+    console.error('[google-callback] GOOGLE_TOKEN_ENC_KEY が未設定のため保存できません');
+    return NextResponse.redirect(`${origin}/settings?google=error`);
+  }
+
   const client = oauthClient();
   let tokens;
   try {

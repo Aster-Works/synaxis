@@ -12,11 +12,19 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.redirect(`${request.nextUrl.origin}/login`, { status: 303 });
 
   const active = await getActiveChurch();
-  if (active && ['owner', 'admin'].includes(active.role)) {
-    await revokeRefreshToken(supabase, active.church_id);
-    await supabase.rpc('delete_google_integration', { p_church: active.church_id });
+  if (!active || !['owner', 'admin'].includes(active.role)) {
+    return NextResponse.redirect(`${request.nextUrl.origin}/settings?google=forbidden`, {
+      status: 303,
+    });
   }
-  return NextResponse.redirect(`${request.nextUrl.origin}/settings?google=disconnected`, {
-    status: 303,
+
+  await revokeRefreshToken(supabase, active.church_id);
+  const { error } = await supabase.rpc('delete_google_integration', {
+    p_church: active.church_id,
   });
+  // DB から消せていないのに「解除済み」と表示しない（暗号化トークンが残るため）。
+  return NextResponse.redirect(
+    `${request.nextUrl.origin}/settings?google=${error ? 'error' : 'disconnected'}`,
+    { status: 303 },
+  );
 }
