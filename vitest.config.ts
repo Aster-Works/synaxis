@@ -7,6 +7,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./', import.meta.url)),
+      // `server-only` は Node で import すると throw するため、
+      // サーバ専用モジュール（app/lib/reports.ts 等）のテスト用に空実装へ差し替える。
+      'server-only': fileURLToPath(
+        new URL('./tests/unit/server-only-stub.ts', import.meta.url),
+      ),
     },
   },
   test: {

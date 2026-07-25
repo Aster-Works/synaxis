@@ -29,12 +29,65 @@ export interface RangeBounds {
   untilISO?: string;
 }
 
-function periodStart(period: Period): Date {
+export function periodStart(period: Period): Date {
   const d = new Date();
+  const day = d.getDate();
   if (period === '3m') d.setMonth(d.getMonth() - 3);
   else if (period === '6m') d.setMonth(d.getMonth() - 6);
-  else d.setTime(0);
+  else {
+    d.setTime(0);
+    return d;
+  }
+  // 月末オーバーフローを前月末日へクランプ（5/31 の3ヶ月前が 3/2 になる JS の挙動対策）。
+  if (d.getDate() !== day) d.setDate(0);
   return d;
+}
+
+// PostgREST は max_rows（既定1000）で結果を黙って切り捨てる。切り捨てられると
+// ダッシュボード・CSV・Sheets が「三者一致のまま全部過少」になり検出できないため、
+// 出席は必ずページングで全件取得する。.in() の礼拝ID列も URL 長対策で分割する。
+//
+// ページングは offset ではなく keyset（id > 直前の最大id）で進める。理由は2つ:
+//  - 終了条件を「0件が返るまで」にでき、サーバ側 max_rows がページサイズより
+//    小さく設定されても切り捨てに戻らない（offset 方式は max_rows と結合する）。
+//  - 受付中の同時 INSERT で行がページ境界をまたいでも、重複・欠落が起きない。
+const ATTENDANCE_PAGE = 1000;
+const EVENT_ID_CHUNK = 100;
+
+export async function fetchAllAttendance<T>(
+  supabase: SupabaseClient,
+  churchId: string,
+  eventIds: string[],
+  select: string,
+): Promise<T[]> {
+  const rows: T[] = [];
+  // keyset のカーソルに使うため id を必ず取得する（呼び出し側の select には不要）。
+  const selectWithId = /(^|,)\s*id\s*(,|$)/.test(select) ? select : `id, ${select}`;
+
+  for (let i = 0; i < eventIds.length; i += EVENT_ID_CHUNK) {
+    const chunk = eventIds.slice(i, i + EVENT_ID_CHUNK);
+    let cursor: string | null = null;
+    for (;;) {
+      let q = supabase
+        .from('attendance_records')
+        .select(selectWithId)
+        .eq('church_id', churchId)
+        .in('service_event_id', chunk)
+        .order('id', { ascending: true })
+        .limit(ATTENDANCE_PAGE);
+      if (cursor) q = q.gt('id', cursor);
+
+      const { data, error } = await q;
+      if (error) {
+        throw new Error(`出席データの取得に失敗しました: ${error.message}`);
+      }
+      const batch = (data ?? []) as unknown as (T & { id: string })[];
+      if (batch.length === 0) break;
+      rows.push(...batch);
+      cursor = batch[batch.length - 1].id;
+    }
+  }
+  return rows;
 }
 
 // 期間集計を「ユニーク」「延べ」両方まとめて返す（DB取得は1回・集計のみ2回）。
@@ -57,19 +110,21 @@ export async function getPeriodReportModes(
   if (filter.kinds.length > 0) q = q.in('kind', filter.kinds);
   if (filter.ratedOnly) q = q.eq('counts_toward_attendance_rate', true);
 
-  const { data: eventsData } = await q;
+  const { data: eventsData, error: eventsError } = await q;
+  if (eventsError) {
+    throw new Error(`礼拝データの取得に失敗しました: ${eventsError.message}`);
+  }
   const events = (eventsData ?? []) as ServiceEvent[];
   const eventIds = events.map((e) => e.id);
 
   let attendance: PeriodAttendanceRow[] = [];
   if (eventIds.length > 0) {
-    const { data } = await supabase
-      .from('attendance_records')
-      .select('service_event_id, person_id, lunch_quantity, person:people(age_group, relationship_status)')
-      .eq('church_id', churchId)
-      .in('service_event_id', eventIds);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    attendance = (data ?? []) as any;
+    attendance = await fetchAllAttendance<PeriodAttendanceRow>(
+      supabase,
+      churchId,
+      eventIds,
+      'service_event_id, person_id, lunch_quantity, person:people(age_group, relationship_status)',
+    );
   }
 
   const make = (countMode: CountMode): PeriodReport => {
@@ -130,6 +185,12 @@ export async function getPeopleStatsModes(
     eventsQ,
   ]);
 
+  if (peopleRes.error) {
+    throw new Error(`人物データの取得に失敗しました: ${peopleRes.error.message}`);
+  }
+  if (eventsRes.error) {
+    throw new Error(`礼拝データの取得に失敗しました: ${eventsRes.error.message}`);
+  }
   const people = (peopleRes.data ?? []) as Person[];
   const events = (eventsRes.data ?? []) as {
     id: string;
@@ -156,12 +217,12 @@ export async function getPeopleStatsModes(
     rated: boolean;
   }[] = [];
   if (eventIds.length > 0) {
-    const { data } = await supabase
-      .from('attendance_records')
-      .select('person_id, checked_in_at, service_event_id')
-      .eq('church_id', churchId)
-      .in('service_event_id', eventIds);
-    attendance = (data ?? []).map(
+    const data = await fetchAllAttendance<{
+      person_id: string;
+      checked_in_at: string;
+      service_event_id: string;
+    }>(supabase, churchId, eventIds, 'person_id, checked_in_at, service_event_id');
+    attendance = data.map(
       (a: { person_id: string; checked_in_at: string; service_event_id: string }) => ({
         person_id: a.person_id,
         checked_in_at: a.checked_in_at,
@@ -231,18 +292,23 @@ export async function getAttendanceMatrix(
       .order('furigana', { ascending: true, nullsFirst: false }),
   ]);
 
+  if (eventsRes.error) {
+    throw new Error(`礼拝データの取得に失敗しました: ${eventsRes.error.message}`);
+  }
+  if (peopleRes.error) {
+    throw new Error(`人物データの取得に失敗しました: ${peopleRes.error.message}`);
+  }
   const events = (eventsRes.data ?? []) as ServiceEvent[];
   const people = (peopleRes.data ?? []) as Person[];
   const eventIds = events.map((e) => e.id);
 
   const present = new Set<string>();
   if (eventIds.length > 0) {
-    const { data } = await supabase
-      .from('attendance_records')
-      .select('person_id, service_event_id')
-      .eq('church_id', churchId)
-      .in('service_event_id', eventIds);
-    for (const a of (data ?? []) as { person_id: string; service_event_id: string }[]) {
+    const data = await fetchAllAttendance<{
+      person_id: string;
+      service_event_id: string;
+    }>(supabase, churchId, eventIds, 'person_id, service_event_id');
+    for (const a of data) {
       present.add(`${a.person_id}|${a.service_event_id}`);
     }
   }

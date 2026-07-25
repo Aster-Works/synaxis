@@ -10,6 +10,7 @@ import {
 } from '@/app/lib/types';
 import { formatDateInZone, formatTimeInZone } from '@/app/lib/datetime';
 import { summarizePeriod, type PeriodAttendanceRow } from '@/app/lib/aggregate';
+import { fetchAllAttendance } from '@/app/lib/reports';
 import { EventForm } from './EventForm';
 import { EventRowEdit } from './EventRowEdit';
 
@@ -19,30 +20,36 @@ export default async function EventsPage() {
 
   const canManage = ['owner', 'admin'].includes(active.role);
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('service_events')
     .select('*')
     .eq('church_id', active.church_id)
     .order('starts_at', { ascending: false })
     .limit(50);
+  if (error) {
+    throw new Error(`礼拝データの取得に失敗しました: ${error.message}`);
+  }
   const events = (data ?? []) as ServiceEvent[];
 
   // 各礼拝の集計（出席・大人・子ども・昼食）を受付/ダッシュボードと同じ純関数で算出する。
   const eventIds = events.map((e) => e.id);
   let attendance: PeriodAttendanceRow[] = [];
   if (eventIds.length > 0) {
-    const { data: att } = await supabase
-      .from('attendance_records')
-      .select('service_event_id, person_id, lunch_quantity, person:people(age_group, relationship_status)')
-      .eq('church_id', active.church_id)
-      .in('service_event_id', eventIds);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    attendance = (att ?? []) as any;
+    attendance = await fetchAllAttendance<PeriodAttendanceRow>(
+      supabase,
+      active.church_id,
+      eventIds,
+      'service_event_id, person_id, lunch_quantity, person:people(age_group, relationship_status)',
+    );
   }
+  // 一覧は「その礼拝に実際に出席した数」を出すため延べ(total)で数える。
+  // 既定の unique（1日1人1回）だと、同日に朝礼拝と夕拝がある場合、
+  // 夕拝の出席が朝礼拝出席者のぶんだけ少なく表示されてしまう。
   const { eventReports } = summarizePeriod({
     events,
     attendance,
     timezone: active.church.timezone,
+    countMode: 'total',
   });
   const reportByEvent = new Map<string, PeriodEventReport>(
     eventReports.map((r) => [r.event.id, r]),
@@ -74,8 +81,10 @@ export default async function EventsPage() {
                 {/* 集計（受付・ダッシュボードと同じ数字）。出席があるときのみ表示。 */}
                 {r && r.present > 0 && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-600">
+                    {/* 延べ＝この礼拝の実出席者数（受付画面と一致）。集計タブの既定は
+                        「1日1人1回」なので、同日に複数礼拝がある日は数字が異なる。 */}
                     <span>
-                      出席{' '}
+                      出席（延べ）{' '}
                       <span className="font-semibold text-slate-900">{r.present}</span>
                     </span>
                     <span>

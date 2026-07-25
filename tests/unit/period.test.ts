@@ -178,3 +178,21 @@ describe('summarizePeriod', () => {
     expect(r.trend[0].weekStart < r.trend[1].weekStart).toBe(true); // 昇順
   });
 });
+
+describe('summarizePeriod（person join が null の行）', () => {
+  it('人物が消えた出席行は出席にも昼食にも数えない', () => {
+    const events = [ev('m1', 'morning_worship', '2026-06-07T01:30:00Z', true)];
+    const attendance: PeriodAttendanceRow[] = [
+      att('m1', 'adult', 'member', 1),
+      {
+        service_event_id: 'm1',
+        person_id: 'ghost',
+        lunch_quantity: 3,
+        person: null,
+      } as PeriodAttendanceRow,
+    ];
+    const r = summarizePeriod({ events, attendance, timezone: TZ });
+    expect(r.totals.present).toBe(1);
+    expect(r.totals.lunch).toBe(1); // ghost の昼食3を数えない
+  });
+});
