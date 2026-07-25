@@ -11,7 +11,7 @@ Jimi が行う残りの手順をまとめる。クラウド構築の大部分は
 | Supabase ref | `korslvkwqpyiagwyjroi` |
 | Supabase URL | `https://korslvkwqpyiagwyjroi.supabase.co` |
 | ホスティング | Vercel プロジェクト **synaxis**（team: **Aster Works** / slug `asterworks`。2026-07 に jimiaki7s-projects から移管） |
-| 本番 URL | **https://synaxis-asterworks.vercel.app**（旧 `synaxis-ten.vercel.app` も同じ配信）<br>⚠ Vercel の Deployment Protection（SSO / `all_except_custom_domains`）が有効で、独自ドメイン未設定のため**会衆はアクセスできない**。パイロット開始前に解除するか独自ドメインを割り当てる |
+| 本番 URL | **https://synaxis.church**（www も配信。`synaxis-ten.vercel.app` は www へ 308／`synaxis-asterworks.vercel.app` も同じ配信）<br>Deployment Protection は解除済み＝公開状態 |
 | デプロイ | GitHub `Aster-Works/synaxis` 連携済み → **main へ push すると自動デプロイ** |
 | 費用 | Supabase 無料枠（有効プロジェクトは Keryx と Synaxis の2つ） / Vercel Hobby |
 
@@ -35,10 +35,21 @@ Jimi が行う残りの手順をまとめる。クラウド構築の大部分は
 **以下の Supabase ダッシュボード設定を行うまで本番では動作しない**（Google は無効・既存ユーザーは
 パスワード未設定のためログイン不可）。
 
-### 1. Authentication → URL Configuration
-- **Site URL**: `https://synaxis-ten.vercel.app`
-- **Redirect URLs**（追加）: `https://synaxis-ten.vercel.app/**`
-  （独自ドメインを後で割り当てたらそれも追加）
+### 1. Authentication → URL Configuration（設定済み・2026-07-26 修正）
+
+**独自ドメイン `synaxis.church` へ移行したのに、ここが旧 Vercel URL のままだったため
+Google ログインが失敗していた**（2026-07-26 に修正済み）。
+
+- **Site URL**: `https://synaxis.church`
+- **Redirect URLs**:
+  `https://synaxis.church/**`,`https://www.synaxis.church/**`,`https://synaxis-asterworks.vercel.app/**`,`https://synaxis-ten.vercel.app/**`
+
+⚠️ **ドメインを変えたら必ずここも変える**。アプリは `window.location.origin` から
+`/auth/callback` を組み立てて `redirectTo` に渡すため、そのオリジンが Redirect URLs に
+無いと、GoTrue は認証後に Site URL 側へ戻してしまう。PKCE の code_verifier は
+「開始したオリジン」のブラウザ側にしか無いので、別オリジンへ戻ると交換に失敗し、
+`/login?error=auth`（「ログインに失敗しました」）になる。apex と www は**別オリジン**
+扱いなので両方を列挙すること。
 
 ### 2. Authentication → Providers → Email
 - **Confirm email** を **OFF**（確認メールなしで即ログインする運用）。
@@ -69,7 +80,7 @@ Jimi が行う残りの手順をまとめる。クラウド構築の大部分は
 
 1. クラウドの **secret(service_role) キー**を取得: ダッシュボード → Project Settings →
    API → `service_role` / secret key。**サーバ専用・ブラウザやチャットに貼らない。**
-2. 本番アプリ `https://synaxis-ten.vercel.app` にサインアップ → オンボーディングで
+2. 本番アプリ `https://synaxis.church` にサインアップ → オンボーディングで
    教会「永福南キリスト教会」を作成（あなたが owner になる）。
 3. 作成した教会の id を控える（Supabase Studio の `public.churches` で確認可）。
 4. 中間 JSON を生成（読み取り専用・元 Excel は変更しない）:
@@ -100,12 +111,19 @@ Jimi が行う残りの手順をまとめる。クラウド構築の大部分は
 
 ```
 GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
-GOOGLE_OAUTH_REDIRECT_URI=https://synaxis-ten.vercel.app/api/integrations/google/callback,
+GOOGLE_OAUTH_REDIRECT_URI=https://synaxis.church/api/integrations/google/callback,
 GOOGLE_TOKEN_ENC_KEY  (openssl rand -base64 32)
 ```
 
 承認済みリダイレクト URI に上記 callback を Google 側にも登録する。設定するまで
 Google 出力機能のみ未稼働（受付・集計・CSV は影響なし）。
+
+⚠️ **要確認（2026-07-26）**: `GOOGLE_OAUTH_REDIRECT_URI` は Vercel で sensitive 扱いのため
+値を読み出せない。独自ドメイン移行前に設定したものなら **旧 URL のまま**の可能性が高く、その場合
+スプレッドシート連携の接続時に Google 側で `redirect_uri_mismatch` になる。Vercel の env と
+Google Cloud の「承認済みリダイレクト URI」の**両方**を `https://synaxis.church/api/integrations/google/callback`
+に揃えること。※ログイン用の Google OAuth は Supabase 側の
+`https://<ref>.supabase.co/auth/v1/callback` を使うため、こちらの影響は受けない。
 
 ## 今後のデプロイ・スキーマ変更
 
