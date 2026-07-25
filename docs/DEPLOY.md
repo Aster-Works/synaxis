@@ -10,12 +10,19 @@ Jimi が行う残りの手順をまとめる。クラウド構築の大部分は
 | クラウド DB | Supabase プロジェクト **Synaxis**（リージョン ap-northeast-1 / 東京） |
 | Supabase ref | `korslvkwqpyiagwyjroi` |
 | Supabase URL | `https://korslvkwqpyiagwyjroi.supabase.co` |
-| ホスティング | Vercel プロジェクト **synaxis**（team: jimiaki7s-projects） |
-| 本番 URL | **https://synaxis-ten.vercel.app** |
-| デプロイ | GitHub `jimiaki7/synaxis` 連携済み → **main へ push すると自動デプロイ** |
+| ホスティング | Vercel プロジェクト **synaxis**（team: **Aster Works** / slug `asterworks`。2026-07 に jimiaki7s-projects から移管） |
+| 本番 URL | **https://synaxis-asterworks.vercel.app**（旧 `synaxis-ten.vercel.app` も同じ配信）<br>⚠ Vercel の Deployment Protection（SSO / `all_except_custom_domains`）が有効で、独自ドメイン未設定のため**会衆はアクセスできない**。パイロット開始前に解除するか独自ドメインを割り当てる |
+| デプロイ | GitHub `Aster-Works/synaxis` 連携済み → **main へ push すると自動デプロイ** |
 | 費用 | Supabase 無料枠（有効プロジェクトは Keryx と Synaxis の2つ） / Vercel Hobby |
 
-- DB スキーマ・RLS・RPC（migration 9本）はクラウドへ適用済み（`supabase/migrations/`）。
+- DB スキーマ・RLS・RPC はクラウドへ適用済み（`supabase/migrations/`）。
+- ⚠ **migration 履歴がローカルと本番で版名不一致**（本番はダッシュボード/MCP 経由で投入されたため、
+  ローカル11本が「未適用」、本番に別タイムスタンプの10本が記録されている）。このまま
+  `supabase db push` すると初期スキーマから当てにいって事故る。新しい migration を本番へ入れる前に
+  `supabase migration repair --status applied <既存の各版>` で履歴を揃え、`--dry-run` で
+  「新規1本だけが残る」ことを確認してから push すること。
+- 未適用の migration: `20260726050000_harden_table_privileges`（anon/authenticated の TRUNCATE 等剥奪。
+  アプリ動作には不要なので未適用でも本番は正常。適用は上記の repair 後）。
 - セキュリティアドバイザ確認済み。SECURITY DEFINER 関数は anon から実行不可、
   トリガー関数は全ロールから revoke 済み（`0009_harden_function_grants`）。
 - Vercel に公開 env（`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`）
@@ -103,7 +110,7 @@ Google 出力機能のみ未稼働（受付・集計・CSV は影響なし）。
 ## 今後のデプロイ・スキーマ変更
 
 - **アプリ**: `git push origin main` で Vercel が自動ビルド・デプロイ。
-  手動は `vercel --prod --scope jimiaki7s-projects`。
+  手動は `vercel --prod --scope asterworks`。
 - **スキーマ変更**: `supabase/migrations/` に追加型 migration を足し、クラウドへ適用
   （`supabase link --project-ref korslvkwqpyiagwyjroi` 後 `supabase db push`、
   または Supabase MCP の apply_migration）。**破壊的変更は事前バックアップと
