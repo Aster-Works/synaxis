@@ -14,8 +14,12 @@ export async function GET(_request: NextRequest, { params }: Params) {
   const event = await getEventById(supabase, eventId);
   if (!event) return apiError('礼拝が見つかりません', 404);
 
-  const rows = await getReceptionRows(supabase, event.church_id, eventId);
-  const summary = summarizeReception(rows);
-
-  return NextResponse.json({ event, rows, summary });
+  try {
+    const rows = await getReceptionRows(supabase, event.church_id, eventId);
+    const summary = summarizeReception(rows);
+    return NextResponse.json({ event, rows, summary });
+  } catch {
+    // 一時障害。クライアント（useReceptionSync）は手元の最新表示を保って再試行する。
+    return apiError('受付データの取得に失敗しました', 503);
+  }
 }

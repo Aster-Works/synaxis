@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { apiError, getApiContext } from '@/app/lib/api';
+import { apiError, dbErrorStatus, getApiContext } from '@/app/lib/api';
 import { getEventById } from '@/app/lib/reception';
 import { putAttendanceSchema } from '@/app/lib/validation';
 
@@ -37,8 +37,9 @@ export async function PUT(request: NextRequest, { params }: Params) {
     .single();
 
   if (error) {
-    // RLS 拒否・church_id 整合トリガー違反・存在しない人物など。
-    return apiError('保存に失敗しました', 403);
+    // RLS 拒否・church_id 整合トリガー違反は 4xx（再送しても直らない）、
+    // 接続断などの一時障害は 503（クライアントが再送する）。
+    return apiError('保存に失敗しました', dbErrorStatus(error));
   }
   return NextResponse.json({ attendance: data });
 }
@@ -49,12 +50,25 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
   const { supabase, user } = await getApiContext();
   if (!user) return apiError('認証が必要です', 401);
 
-  const { error } = await supabase
+  const { error, count } = await supabase
     .from('attendance_records')
-    .delete()
+    .delete({ count: 'exact' })
     .eq('service_event_id', eventId)
     .eq('person_id', personId);
 
-  if (error) return apiError('取り消しに失敗しました', 403);
+  if (error) return apiError('取り消しに失敗しました', dbErrorStatus(error));
+  if (!count) {
+    // 0件削除は「元々無い（冪等に成功）」か「RLS で削除できなかった」のどちらか。
+    // まだ行が見えるなら後者なので、成功と偽らず 403 を返す。
+    const { data: still, error: checkError } = await supabase
+      .from('attendance_records')
+      .select('id')
+      .eq('service_event_id', eventId)
+      .eq('person_id', personId)
+      .maybeSingle();
+    // 確認自体が失敗したなら「消せた」と断定できない。成功を返さず再送させる。
+    if (checkError) return apiError('取り消しを確認できませんでした', dbErrorStatus(checkError));
+    if (still) return apiError('取り消す権限がありません', 403);
+  }
   return NextResponse.json({ ok: true });
 }

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { apiError, getApiContext } from '@/app/lib/api';
+import { apiError, dbErrorStatus, getApiContext } from '@/app/lib/api';
 import { upsertPersonSchema } from '@/app/lib/validation';
 
 type Params = { params: Promise<{ personId: string }> };
@@ -29,7 +29,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     .select()
     .maybeSingle();
 
-  if (error) return apiError('更新に失敗しました', 403);
+  if (error) return apiError('更新に失敗しました', dbErrorStatus(error));
   if (!data) return apiError('権限がないか、人物が見つかりません', 404);
   return NextResponse.json({ person: data });
 }
@@ -45,7 +45,7 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
     .delete({ count: 'exact' })
     .eq('id', personId);
 
-  if (error) return apiError('削除に失敗しました', 403);
+  if (error) return apiError('削除に失敗しました', dbErrorStatus(error));
   if (!count) return apiError('権限がないか、人物が見つかりません', 404);
   return NextResponse.json({ ok: true });
 }

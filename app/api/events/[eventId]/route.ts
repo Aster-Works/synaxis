@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { apiError, getApiContext } from '@/app/lib/api';
+import { apiError, dbErrorStatus, getApiContext } from '@/app/lib/api';
 import { getActiveChurch } from '@/app/lib/auth';
 import { zonedDateTimeToUtcISO } from '@/app/lib/datetime';
 import { serviceKindSchema, serviceStatusSchema } from '@/app/lib/validation';
@@ -43,10 +43,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       note: parsed.data.note ?? null,
     })
     .eq('id', eventId)
+    // アクティブ教会に限定（RLS に加えた多重防御）。starts_at をアクティブ教会の
+    // timezone で変換しているため、他教会のイベントを対象にさせない意味もある。
+    .eq('church_id', active.church_id)
     .select()
     .maybeSingle();
 
-  if (error) return apiError('更新に失敗しました', 403);
+  if (error) return apiError('更新に失敗しました', dbErrorStatus(error));
   if (!data) return apiError('権限がないか、礼拝が見つかりません', 404);
   return NextResponse.json({ event: data });
 }
@@ -56,13 +59,16 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
   const { eventId } = await params;
   const { supabase, user } = await getApiContext();
   if (!user) return apiError('認証が必要です', 401);
+  const active = await getActiveChurch();
+  if (!active) return apiError('所属教会がありません', 404);
 
   const { error, count } = await supabase
     .from('service_events')
     .delete({ count: 'exact' })
-    .eq('id', eventId);
+    .eq('id', eventId)
+    .eq('church_id', active.church_id);
 
-  if (error) return apiError('削除に失敗しました', 403);
+  if (error) return apiError('削除に失敗しました', dbErrorStatus(error));
   if (!count) return apiError('権限がないか、礼拝が見つかりません', 404);
   return NextResponse.json({ ok: true });
 }

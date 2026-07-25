@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { apiError, getApiContext } from '@/app/lib/api';
+import { apiError, dbErrorStatus, getApiContext } from '@/app/lib/api';
 import { getEventById } from '@/app/lib/reception';
 import { createGuestSchema } from '@/app/lib/validation';
 import type { Person } from '@/app/lib/types';
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       )
       .select()
       .maybeSingle();
-    if (insErr) return apiError('ゲストの追加に失敗しました', 403);
+    if (insErr) return apiError('ゲストの追加に失敗しました', dbErrorStatus(insErr));
     if (inserted) {
       person = inserted as Person;
     } else {
@@ -68,11 +68,14 @@ export async function POST(request: NextRequest, { params }: Params) {
       .insert(baseRow)
       .select()
       .single();
-    if (insErr || !inserted) return apiError('ゲストの追加に失敗しました', 403);
+    if (insErr || !inserted) {
+      return apiError('ゲストの追加に失敗しました', dbErrorStatus(insErr));
+    }
     person = inserted as Person;
   }
 
-  if (!person) return apiError('ゲストの追加に失敗しました', 403);
+  // 冪等 upsert 後の既存行 SELECT が一時障害で取れなかった等 → 再送で解決する。
+  if (!person) return apiError('ゲストの追加に失敗しました', 503);
 
   // 2) 出席登録（冪等 upsert）
   const { data: attendance, error: attendanceError } = await supabase

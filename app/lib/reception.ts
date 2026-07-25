@@ -105,6 +105,14 @@ export async function getReceptionRows(
       .eq('service_event_id', eventId),
   ]);
 
+  // 取得失敗を空配列にすり替えない。すり替えると受付一覧が「人物ゼロ」や
+  // 「全員未出席」に見え、複数端末の refetch がその誤りで画面を上書きしてしまう。
+  if (peopleRes.error) {
+    throw new Error(`人物データの取得に失敗しました: ${peopleRes.error.message}`);
+  }
+  if (attRes.error) {
+    throw new Error(`出席データの取得に失敗しました: ${attRes.error.message}`);
+  }
   const people = (peopleRes.data ?? []) as Person[];
   const attendance = (attRes.data ?? []) as AttendanceRecord[];
   const byPerson = new Map<string, AttendanceRecord>();
