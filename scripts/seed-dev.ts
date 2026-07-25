@@ -21,6 +21,9 @@ const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SECRET = process.env.SUPABASE_SECRET_KEY!;
 const SAMPLE_CHURCH_ID = '00000000-0000-0000-0000-0000000000c1';
 const DEV_EMAIL = 'dev@synaxis.test';
+// ログイン画面はメール＋パスワード（と Google）のみ。マジックリンクの UI は無いので、
+// パスワードを設定しないと dev ユーザーでは画面から入れない。ローカル専用の固定値。
+const DEV_PASSWORD = process.env.DEV_PASSWORD ?? 'synaxis-dev';
 
 if (!URL || !SECRET) {
   console.error('NEXT_PUBLIC_SUPABASE_URL と SUPABASE_SECRET_KEY が必要です。');
@@ -36,20 +39,32 @@ async function main() {
   let userId: string | undefined;
   const created = await admin.auth.admin.createUser({
     email: DEV_EMAIL,
+    password: DEV_PASSWORD,
     email_confirm: true,
     user_metadata: { display_name: '開発ユーザー' },
   });
 
   if (created.error) {
-    // 既存の場合は一覧から探す
+    // 既存の場合は一覧から探し、パスワードを既定値へ揃える（再実行で復旧できるように）
     const { data } = await admin.auth.admin.listUsers();
     userId = data.users.find((u) => u.email === DEV_EMAIL)?.id;
+    if (userId) {
+      await admin.auth.admin.updateUserById(userId, { password: DEV_PASSWORD });
+    }
   } else {
     userId = created.data.user?.id;
   }
 
   if (!userId) {
+    // 直後に db:reset した場合、auth コンテナが再起動中で 502 になることがある。
+    // 原因が分かるようにサーバの応答をそのまま出す。
     console.error('dev ユーザーの作成・取得に失敗しました。');
+    if (created.error) {
+      console.error(
+        `  createUser: status=${created.error.status ?? '-'} message=${created.error.message}`,
+      );
+      console.error('  502 の場合は auth コンテナの起動待ちです。数秒おいて再実行してください。');
+    }
     process.exit(1);
   }
 
@@ -65,11 +80,11 @@ async function main() {
 
   console.log('✓ dev ユーザー準備完了');
   console.log(`  email      : ${DEV_EMAIL}`);
+  console.log(`  password   : ${DEV_PASSWORD}（ローカル専用。DEV_PASSWORD で変更可）`);
   console.log(`  user_id    : ${userId}`);
   console.log(`  church     : サンプル教会 (${SAMPLE_CHURCH_ID}) の owner`);
   console.log('');
-  console.log('ログイン: /login で上記メールを入力 →');
-  console.log('  Inbucket (http://127.0.0.1:54524) に届くマジックリンクを開く。');
+  console.log('ログイン: /login で上記のメールとパスワードを入力する。');
 }
 
 main();

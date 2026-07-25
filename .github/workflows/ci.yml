@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # ビルド・型チェックを通すためのダミー値（実 DB へは接続しない）。
-      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54521
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-dummy-publishable-key
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
     steps:

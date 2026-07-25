@@ -40,19 +40,25 @@ npm run db:start
 
 # 3. 環境変数を設定
 cp .env.example .env.local
-#   NEXT_PUBLIC_SUPABASE_URL            ← API URL（既定 http://127.0.0.1:54321）
+#   NEXT_PUBLIC_SUPABASE_URL            ← API URL（既定 http://127.0.0.1:54521）
 #   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ← anon / publishable key
 #   SUPABASE_SECRET_KEY                 ← service_role / secret key（管理スクリプト専用）
 
 # 4. マイグレーション + シードを適用
 npm run db:reset
 
-# 5. 開発サーバー
+# 5. dev ユーザー（dev@synaxis.test / パスワード synaxis-dev）を作成し
+#    サンプル教会の owner にする。db:reset 直後は auth コンテナの再起動で
+#    502 になることがあるので、その場合は数秒おいて再実行する。
+npm run db:seed:dev
+
+# 6. 開発サーバー
 npm run dev   # http://localhost:3000
 ```
 
-ローカルの Supabase Studio は `http://127.0.0.1:54523`、メール確認は Inbucket
-`http://127.0.0.1:54524`（マジックリンクのメールはここに届く）。
+ログインは `/login` で **dev@synaxis.test / synaxis-dev**（メール＋パスワード）。
+ローカルの Supabase Studio は `http://127.0.0.1:54523`、送信メールの確認は Inbucket
+`http://127.0.0.1:54524`。
 
 > ポートは既定（543xx）から **545xx** にずらしてある（同マシンの他 Supabase
 > プロジェクトとの競合回避のため。`supabase/config.toml` 参照）。
