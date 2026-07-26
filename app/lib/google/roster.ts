@@ -44,16 +44,26 @@ export function buildRosterTabs(
 
   // ── 立場別/子どもタブ（人物×主日の出席マトリクス）─────────────────────
   const isChild = (p: Person) => p.age_group === 'child';
+  // 出席率の分母は「出席率対象（counts_toward_attendance_rate）の主日」（AGENTS.md）。
+  // 表記は CSV 人物一覧の「出席率(%)」と同じ整数%。
+  // ※このタブは主日（朝礼拝）のみの名簿なので、夕拝等が出席率対象の場合の
+  //   ダッシュボード値とは分母が異なりうる（名簿は主日基準で読む前提）。
+  const ratedSundays = sundays.filter((e) => e.counts_toward_attendance_rate);
   const matrixTab = (title: string, members: Person[]): RosterTab => {
     const rows: CsvCell[][] = [];
     rows.push([`${year}年 主日礼拝出席者名簿`]);
-    rows.push(['', '', ...monthHeader]); // #・名前 列は空、以降が月見出し
-    rows.push(['#', '名前', ...dayRow]);
+    rows.push(['', '', ...monthHeader, '', '']); // #・名前 列は空、以降が月見出し
+    rows.push(['#', '名前', ...dayRow, '出席', '出席率(%)']);
     members.forEach((p, i) => {
+      const attended = ratedSundays.filter((e) => came(p.id, e.id)).length;
       rows.push([
         i + 1,
         p.display_name,
         ...sundays.map((e) => (came(p.id, e.id) ? '○' : '')),
+        attended,
+        ratedSundays.length > 0
+          ? Math.round((attended / ratedSundays.length) * 100)
+          : '',
       ]);
     });
     if (members.length === 0) rows.push(['', '（該当者なし）']);
@@ -161,4 +171,36 @@ export function buildRosterTabs(
   const specialTab: RosterTab = { title: '特別礼拝', rows: specialRows };
 
   return [summaryTab, ...categoryTabs, specialTab];
+}
+
+// ── 罫線を引く「表ブロック」を行データから求める純関数 ─────────────────────
+// 「2セル以上あり、かつ中身のあるセルを含む行」が連続する区間を1ブロックとする。
+// タイトル行（1セルの行）・空行はブロック外＝罫線を引かない。
+// cols はブロック内で最も長い行に合わせる（endRow / cols は排他的境界）。
+export interface BorderBlock {
+  startRow: number;
+  endRow: number; // exclusive
+  cols: number;
+}
+
+export function borderBlocks(rows: CsvCell[][]): BorderBlock[] {
+  const qualifies = (r: CsvCell[]) =>
+    r.length >= 2 && r.some((c) => c !== '' && c !== null && c !== undefined);
+  const out: BorderBlock[] = [];
+  let start = -1;
+  let cols = 0;
+  rows.forEach((r, i) => {
+    if (qualifies(r)) {
+      if (start < 0) {
+        start = i;
+        cols = 0;
+      }
+      cols = Math.max(cols, r.length);
+    } else if (start >= 0) {
+      out.push({ startRow: start, endRow: i, cols });
+      start = -1;
+    }
+  });
+  if (start >= 0) out.push({ startRow: start, endRow: rows.length, cols });
+  return out;
 }

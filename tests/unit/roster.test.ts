@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildRosterTabs } from '@/app/lib/google/roster';
+import { buildRosterTabs, borderBlocks } from '@/app/lib/google/roster';
 import type { AttendanceMatrix } from '@/app/lib/reports';
 import type {
   Person,
@@ -97,18 +97,31 @@ describe('buildRosterTabs（エクセル風 名簿構造）', () => {
     expect(rowStarting(r, '夕')).toEqual(['夕', 1, '']); // 1/4 に夕拝1、2/1 は無し
   });
 
-  it('会員タブ：人物×主日の出席マトリクス（○）', () => {
+  it('会員タブ：人物×主日の出席マトリクス（○）＋出席回数・出席率', () => {
     const r = tab('会員').rows as (string | number | null)[][];
     expect(r[0]).toEqual(['2026年 主日礼拝出席者名簿']);
-    expect(r[2]).toEqual(['#', '名前', 4, 1]); // ヘッダ（日）
-    expect(r[3]).toEqual([1, '会員 太郎', '○', '○']); // 会員は両主日に出席
+    expect(r[2]).toEqual(['#', '名前', 4, 1, '出席', '出席率(%)']); // ヘッダ（日）
+    expect(r[3]).toEqual([1, '会員 太郎', '○', '○', 2, 100]); // 両主日出席=2/2
     // 大人会員のみ（子どもは別タブ）
     expect(r.filter((x) => typeof x[0] === 'number').length).toBe(1);
   });
 
-  it('子どもタブ：age=child のみ・主日ごとの○', () => {
+  it('子どもタブ：age=child のみ・主日ごとの○と出席率', () => {
     const r = tab('子ども').rows as (string | number | null)[][];
-    expect(r[3]).toEqual([1, '会員 こども', '○', '']); // 1/4のみ出席
+    expect(r[3]).toEqual([1, '会員 こども', '○', '', 1, 50]); // 1/4のみ出席=1/2
+  });
+
+  it('出席率の分母は出席率対象の主日のみ', () => {
+    // m2 を出席率対象外にすると、分母は m1 だけになる
+    const m2off = { ...m2, counts_toward_attendance_rate: false };
+    const tabs2 = buildRosterTabs(
+      { ...matrix, events: [sp1, m1, e1, m2off] },
+      2026,
+      TZ,
+    );
+    const r = tabs2.find((t) => t.title === '会員')!.rows as (string | number | null)[][];
+    // ○ は両主日に付くが、出席回数/率は rated の m1 のみで数える
+    expect(r[3]).toEqual([1, '会員 太郎', '○', '○', 1, 100]);
   });
 
   it('特別礼拝タブ：出席者数と #・名前・○・立場', () => {
@@ -119,5 +132,49 @@ describe('buildRosterTabs（エクセル風 名簿構造）', () => {
     const names = r.filter((x) => typeof x[0] === 'number').map((x) => x[1]);
     expect(names).toContain('会員 太郎');
     expect(names).toContain('未信 次郎');
+  });
+});
+
+describe('borderBlocks（罫線を引く表ブロックの算出）', () => {
+  const tabs = buildRosterTabs(matrix, 2026, TZ);
+  const tab = (t: string) => tabs.find((x) => x.title === t)!;
+
+  it('会員タブ：タイトル行を除き、ヘッダ〜人物行が1ブロック', () => {
+    const blocks = borderBlocks(tab('会員').rows);
+    // 行0=タイトル（1セル）は対象外。行1(月見出し)〜行3(会員太郎) の1ブロック。
+    expect(blocks).toEqual([
+      { startRow: 1, endRow: 4, cols: 2 + 2 + 2 }, // #,名前 + 主日2 + 出席,率
+    ]);
+  });
+
+  it('まとめタブ：本表と月平均が空行・見出し行で分かれる', () => {
+    const blocks = borderBlocks(tab('まとめ').rows);
+    expect(blocks.length).toBe(2);
+    expect(blocks[0].startRow).toBe(0); // 月見出し行〜夕行
+    // 2ブロック目は【月平均】(1セル行)の次から
+    expect(blocks[1].cols).toBe(4); // 月・大人・小人・合計
+  });
+
+  it('特別礼拝タブ：タイトル行を除いた出席者ブロック', () => {
+    const blocks = borderBlocks(tab('特別礼拝').rows);
+    expect(blocks).toEqual([
+      { startRow: 1, endRow: 5, cols: 4 }, // 出席者数・ヘッダ・出席者2名
+    ]);
+  });
+
+  it('空行と1セル行はブロックを区切る', () => {
+    expect(
+      borderBlocks([
+        ['タイトル'],
+        ['a', 'b'],
+        ['c', 'd', 'e'],
+        [],
+        ['単独'],
+        ['x', 'y'],
+      ]),
+    ).toEqual([
+      { startRow: 1, endRow: 3, cols: 3 },
+      { startRow: 5, endRow: 6, cols: 2 },
+    ]);
   });
 });

@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { oauthClient } from './oauth';
 import { buildSheetValues } from './sheets-report';
+import { borderBlocks } from './roster';
 import type { PeriodTotals } from '../types';
 
 // トークン復号と Sheets 書込の中核。平文 refresh_token はこのモジュール内に
@@ -155,6 +156,57 @@ export async function runSheetsExport(
         range: `'${tab.title}'!A1`,
         valueInputOption: 'RAW',
         requestBody: { values: tab.rows as (string | number | null)[][] },
+      });
+    }
+
+    // ── 簡単な罫線（各表ブロックに格子）───────────────────────────────
+    // 値と同様に罫線も「毎回リセット→引き直し」で冪等にする（人数や礼拝数が
+    // 減った再出力で前回の罫線が残らないように）。ブロックの位置・幅は
+    // 純関数 borderBlocks が行データから決める（タイトル行・空行には引かない）。
+    // ※値の書込で必要な列数までグリッドが拡張された後に実行すること。
+    const metaAfter = await sheets.spreadsheets.get({
+      spreadsheetId: sid,
+      fields: 'sheets.properties(sheetId,title)',
+    });
+    const idByTitle = new Map(
+      (metaAfter.data.sheets ?? []).map((s) => [
+        s.properties?.title ?? '',
+        s.properties?.sheetId,
+      ]),
+    );
+    const line = { style: 'SOLID' };
+    const requests: object[] = [];
+    for (const tab of values.tabs) {
+      const sheetId = idByTitle.get(tab.title);
+      if (sheetId == null) continue;
+      // 既存の罫線をタブ全体からクリア
+      requests.push({
+        repeatCell: { range: { sheetId }, cell: {}, fields: 'userEnteredFormat.borders' },
+      });
+      for (const b of borderBlocks(tab.rows)) {
+        requests.push({
+          updateBorders: {
+            range: {
+              sheetId,
+              startRowIndex: b.startRow,
+              endRowIndex: b.endRow,
+              startColumnIndex: 0,
+              endColumnIndex: b.cols,
+            },
+            top: line,
+            bottom: line,
+            left: line,
+            right: line,
+            innerHorizontal: line,
+            innerVertical: line,
+          },
+        });
+      }
+    }
+    if (requests.length > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sid,
+        requestBody: { requests },
       });
     }
 
