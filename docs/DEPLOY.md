@@ -118,12 +118,17 @@ GOOGLE_TOKEN_ENC_KEY  (openssl rand -base64 32)
 承認済みリダイレクト URI に上記 callback を Google 側にも登録する。設定するまで
 Google 出力機能のみ未稼働（受付・集計・CSV は影響なし）。
 
-⚠️ **要確認（2026-07-26）**: `GOOGLE_OAUTH_REDIRECT_URI` は Vercel で sensitive 扱いのため
-値を読み出せない。独自ドメイン移行前に設定したものなら **旧 URL のまま**の可能性が高く、その場合
-スプレッドシート連携の接続時に Google 側で `redirect_uri_mismatch` になる。Vercel の env と
-Google Cloud の「承認済みリダイレクト URI」の**両方**を `https://synaxis.church/api/integrations/google/callback`
-に揃えること。※ログイン用の Google OAuth は Supabase 側の
-`https://<ref>.supabase.co/auth/v1/callback` を使うため、こちらの影響は受けない。
+**設定済み（2026-07-26）**: 事業用 Google アカウントの新規プロジェクトで OAuth クライアントを作成し、
+Vercel の `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_OAUTH_REDIRECT_URI`
+（= `https://synaxis.church/api/integrations/google/callback`）を差し替え、再デプロイ済み。
+要求スコープは `drive.file` + `userinfo.email` のみ（非機密。審査不要で公開できる）。
+
+- ⚠️ 動作確認後、Google Auth Platform →「対象」で**アプリを公開**すること。テストのままだと
+  リフレッシュトークンが**7日で失効**し、毎週再接続になる。
+- ⚠️ もし設定画面が旧クライアント時代の「接続済み」を表示していたら、一度**解除→再連携**する
+  （保存済み refresh_token は旧クライアント宛のため新クライアントでは使えない）。
+- ※ログイン用の Google OAuth は Supabase 側の `https://<ref>.supabase.co/auth/v1/callback` を
+  使う別クライアントで、この差し替えの影響は受けない。
 
 ## 今後のデプロイ・スキーマ変更
 
