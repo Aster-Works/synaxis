@@ -51,6 +51,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/settings?google=noRefresh`);
   }
 
+  // Google の同意画面は権限ごとのチェックボックス（granular consent）で、
+  // drive.file のチェックを外したまま「続行」できる。その場合も refresh_token は
+  // 発行されるため、ここで検証しないと「接続済みなのに出力が必ず失敗」する。
+  // 保存せずに付与を取り消し、チェックを促すメッセージへ誘導する。
+  if (!(tokens.scope ?? '').includes('https://www.googleapis.com/auth/drive.file')) {
+    try {
+      await client.revokeToken(tokens.refresh_token);
+    } catch {
+      /* 取り消し失敗は致命的でない（保存していないので実害なし） */
+    }
+    return NextResponse.redirect(`${origin}/settings?google=noScope`);
+  }
+
   client.setCredentials(tokens);
   let email: string | null = null;
   try {

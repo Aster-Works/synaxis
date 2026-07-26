@@ -76,11 +76,16 @@ export function GoogleIntegrationCard({
           接続を解除しました。
         </p>
       )}
-      {(flash === 'error' || flash === 'forbidden' || flash === 'noRefresh') && (
+      {(flash === 'error' ||
+        flash === 'forbidden' ||
+        flash === 'noRefresh' ||
+        flash === 'noScope') && (
         <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {flash === 'noRefresh'
             ? '再接続が必要です。もう一度お試しください。'
-            : '接続に失敗しました。'}
+            : flash === 'noScope'
+              ? 'ドライブへのアクセス許可が付与されませんでした。もう一度「連携する」を押し、Google の画面で「Google ドライブ ファイルの表示、編集、作成、削除」にチェックを入れてから続行してください。'
+              : '接続に失敗しました。'}
         </p>
       )}
 
