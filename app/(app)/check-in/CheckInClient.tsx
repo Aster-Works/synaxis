@@ -147,7 +147,9 @@ export function CheckInClient({
     <div className="space-y-3">
       {/* イベント情報・検索・フィルターまでを固定し、人物一覧だけスクロールさせる。
           Nav(高さ108px・sticky)の直下に貼り付ける。 */}
-      <div className="sticky top-[108px] z-20 -mx-3 space-y-3 bg-slate-100 px-3 pb-2 sm:-mx-5 sm:px-5">
+      {/* Nav の実高さは画面幅・文字サイズで変わるため、px 直書きではなく
+          Nav が公開する CSS 変数（--nav-h）に貼り付ける。 */}
+      <div className="sticky top-[var(--nav-h,108px)] z-20 -mx-3 space-y-2 bg-slate-100 px-3 pb-2 sm:-mx-5 sm:px-5">
       {/* 修正モード：開催済み等の礼拝の出席を後から直していることを明示 */}
       {correctionMode && (
         <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -164,17 +166,85 @@ export function CheckInClient({
         </div>
       )}
       {/* 礼拝情報＋リアルタイム合計＋同期状態 */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate text-base font-bold text-slate-900">{event.name}</p>
-            <p className="text-xs text-slate-500">
-              {formatDateInZone(event.starts_at, timezone)}{' '}
-              {formatTimeInZone(event.starts_at, timezone)} ·{' '}
-              {SERVICE_KIND_LABELS[event.kind]}
-            </p>
+      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+        {/* 礼拝名・日時と合計を1行に並べる（広い画面では横並び＝高さを詰める）。 */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          {/* スマホは礼拝名を1行占有（横に並べると名前が1文字まで潰れる）。
+              lg 以上で合計チップと同じ行に載せて高さを詰める。 */}
+          <div className="flex w-full min-w-0 items-center gap-2 lg:w-auto lg:flex-1">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold leading-tight text-slate-900">
+                {event.name}
+              </p>
+              <p className="truncate text-[11px] leading-tight text-slate-500">
+                {formatDateInZone(event.starts_at, timezone)}{' '}
+                {formatTimeInZone(event.starts_at, timezone)} ·{' '}
+                {SERVICE_KIND_LABELS[event.kind]}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1 lg:hidden">
+              <SyncStatus
+                online={sync.online}
+                realtime={sync.realtimeConnected}
+                flushing={sync.flushing}
+                pending={sync.pendingCount}
+                onRetry={sync.flushNow}
+              />
+              <button
+                onClick={() => void sync.refetch()}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"
+                aria-label="最新の状態に更新"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* 合計はチップ状にして縦の場所を取らない */}
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 lg:flex-none">
+            <Stat label="出席" value={summary.present} highlight />
+            <Stat label="大人" value={summary.adults} />
+            <Stat label={childLabel} value={summary.children} />
+            <Stat label="昼食" value={summary.lunchTotal} />
+          </div>
+
+          {/* 開催済みにする（owner/admin のみ）。行を増やさず同じ1行に格納する。
+              押すと同じ場所が確認ボタン（実行／やめる）へ入れ替わる＝高さ不変。
+              修正モード（既に開催済み）では出さない。 */}
+          {canComplete && !correctionMode && (
+            confirmComplete ? (
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  onClick={complete}
+                  disabled={isCompleting}
+                  className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white active:scale-95 disabled:opacity-50"
+                >
+                  {isCompleting ? '変更中…' : '開催済みにする'}
+                </button>
+                <button
+                  onClick={() => setConfirmComplete(false)}
+                  disabled={isCompleting}
+                  className="rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  やめる
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setCompleteError(null);
+                  setConfirmComplete(true);
+                }}
+                className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                title="この礼拝を開催済みにする（受付一覧から外れます）"
+              >
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">開催済みにする</span>
+              </button>
+            )
+          )}
+
+          <div className="hidden shrink-0 items-center gap-1 lg:flex">
             <SyncStatus
               online={sync.online}
               realtime={sync.realtimeConnected}
@@ -192,56 +262,11 @@ export function CheckInClient({
           </div>
         </div>
 
-        <div className="mt-2 grid grid-cols-4 gap-2 text-center">
-          <Stat label="出席" value={summary.present} highlight />
-          <Stat label="大人" value={summary.adults} />
-          <Stat label={childLabel} value={summary.children} />
-          <Stat label="昼食" value={summary.lunchTotal} />
-        </div>
-
-        {/* 開催済みにする（owner/admin のみ）。開催済みにすると受付一覧から外れ、
-            「礼拝」タブからのみ参照できる。誤操作防止に確認を挟む。
-            修正モード（既に開催済み）では出さない。 */}
-        {canComplete && !correctionMode && (
-          <div className="mt-3 border-t border-slate-100 pt-3">
-            {completeError && (
-              <p className="mb-2 text-xs text-rose-600" role="alert">
-                {completeError}
-              </p>
-            )}
-            {confirmComplete ? (
-              <div className="flex items-center gap-2">
-                <span className="flex-1 text-xs text-slate-500">
-                  この礼拝を開催済みにします。受付一覧から外れ、「礼拝」タブから確認できます。
-                </span>
-                <button
-                  onClick={complete}
-                  disabled={isCompleting}
-                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white active:scale-95 disabled:opacity-50"
-                >
-                  {isCompleting ? '変更中…' : '開催済みにする'}
-                </button>
-                <button
-                  onClick={() => setConfirmComplete(false)}
-                  disabled={isCompleting}
-                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-50"
-                >
-                  やめる
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  setCompleteError(null);
-                  setConfirmComplete(true);
-                }}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                この礼拝を開催済みにする
-              </button>
-            )}
-          </div>
+        {/* エラーだけは見落とさないよう行を使って出す（通常は非表示＝高さ0） */}
+        {canComplete && !correctionMode && completeError && (
+          <p className="mt-1 text-xs text-rose-600" role="alert">
+            {completeError}
+          </p>
         )}
       </div>
 
@@ -325,7 +350,9 @@ export function CheckInClient({
       {/* ── 固定ブロックここまで。以下の人物一覧だけがスクロールする ── */}
 
       {/* 人物一覧 */}
-      <ul className="space-y-2">
+      {/* タブレット2カラム・横長デスクトップ3カラム: カード幅が狭まり名前とボタンが
+          近づく＋一画面に映る人数が増えて探しやすい。スマホは1カラムのまま。 */}
+      <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((row) => (
           <PersonRow
             key={row.person.id}
@@ -338,7 +365,7 @@ export function CheckInClient({
           />
         ))}
         {filtered.length === 0 && (
-          <li className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
+          <li className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400 md:col-span-2 xl:col-span-3">
             該当する人がいません
           </li>
         )}
@@ -445,16 +472,21 @@ function Stat({
   value: number;
   highlight?: boolean;
 }) {
+  // 「ラベル 値」を横並びのチップにして高さを詰める（従来は縦積みで背が高かった）。
   return (
-    <div className={`rounded-xl px-1 py-1.5 ${highlight ? 'bg-indigo-50' : 'bg-slate-50'}`}>
-      <p
-        className={`text-xl font-bold tabular-nums ${
+    <div
+      className={`flex items-baseline gap-1 rounded-lg px-2 py-1 ${
+        highlight ? 'bg-indigo-50' : 'bg-slate-50'
+      }`}
+    >
+      <span className="text-[11px] text-slate-500">{label}</span>
+      <span
+        className={`text-base font-bold tabular-nums ${
           highlight ? 'text-indigo-700' : 'text-slate-800'
         }`}
       >
         {value}
-      </p>
-      <p className="text-[11px] text-slate-500">{label}</p>
+      </span>
     </div>
   );
 }
@@ -478,14 +510,14 @@ function PersonRow({
   const present = !!attendance;
 
   return (
-    <li className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5">
+    <li className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-base font-medium text-slate-900">
+        <p className="truncate text-xl font-semibold leading-snug text-slate-900">
           {person.display_name}
         </p>
         <div className="mt-0.5 flex items-center gap-1.5">
           {person.furigana && (
-            <span className="truncate text-[11px] text-slate-400">{person.furigana}</span>
+            <span className="truncate text-xs text-slate-400">{person.furigana}</span>
           )}
           <span
             className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ${RELATIONSHIP_BADGE[person.relationship_status]}`}

@@ -24,7 +24,9 @@ export default async function AppLayout({
         role={active.role}
         timezone={active.church.timezone}
       />
-      <main className="mx-auto w-full max-w-5xl px-3 pb-24 pt-4 sm:px-5">
+      {/* 横長デスクトップで3カラムを収めるため max-w-5xl(1024) → 6xl(1152)。
+          ヘッダーの内側コンテナと同じ値にすること。 */}
+      <main className="mx-auto w-full max-w-6xl px-3 pb-24 pt-3 sm:px-5">
         {children}
       </main>
     </div>

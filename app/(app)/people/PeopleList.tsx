@@ -136,18 +136,19 @@ export function PeopleList({
 
       <p className="text-xs text-slate-400">{filtered.length}名</p>
 
-      <ul className="space-y-2">
+      {/* 受付と同じ密度：タブレット2カラム・横長デスクトップ3カラム */}
+      <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((p) => (
           <li
             key={p.id}
-            className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3"
+            className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3"
           >
             <div className="min-w-0">
-              <p className="truncate font-medium text-slate-900">
+              <p className="truncate text-xl font-semibold leading-snug text-slate-900">
                 {p.display_name}
               </p>
               {p.furigana && (
-                <p className="truncate text-[11px] text-slate-400">
+                <p className="truncate text-xs text-slate-400">
                   {p.furigana}
                 </p>
               )}
@@ -185,7 +186,7 @@ export function PeopleList({
           </li>
         ))}
         {filtered.length === 0 && (
-          <li className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
+          <li className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400 md:col-span-2 xl:col-span-3">
             該当する人がいません
           </li>
         )}
